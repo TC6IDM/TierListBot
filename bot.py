@@ -63,10 +63,10 @@ async def tierlist(interaction: discord.Interaction, voting_time_seconds: int = 
     IMAGE_WIDTH = image.size[0]
     IMAGE_HEIGHT = image.size[1]
     AVATAR_SIZE = int(IMAGE_HEIGHT/8)
-    print(IMAGE_HEIGHT)
+    # print(IMAGE_HEIGHT)
     
     #the teir is the key, the value is a list of the original x position and the y position fraction relative to the image height
-    distances = {"🆘": [125,1/8], "🇸": [125,2/8], "🇦": [125,4/8], "🇧": [125,5/8], "🇨": [125,6/8], "🇩": [125,3/8], "🇪": [125,7/8], "🇫": [125,8/8]}
+    distances = {"🆘": [125,1/8], "🇸": [125,2/8], "🇦": [125,3/8], "🇧": [125,4/8], "🇨": [125,5/8], "🇩": [125,6/8], "🇪": [125,7/8], "🇫": [125,8/8]}
     # finalmessage = ""
     
     #numerate through the members and vote messages
