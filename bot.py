@@ -7,7 +7,8 @@ from discord.ext import commands
 from unicodedata import lookup
 from discord import File
 from tinydb import TinyDB, Query, where
-
+import time
+import datetime
 from PIL import Image, ImageDraw, ImageFont
 import io
 from util import createlist
@@ -70,7 +71,10 @@ async def tierlist(interaction: discord.Interaction, timer: bool = False, voting
         
         vote_msg_list.append(vote_msg.id)
     
-    if timer:
+    if timer:        
+        presentDate = datetime.datetime.now()
+        unix_timestamp = datetime.datetime.timestamp(presentDate) + voting_time_seconds
+        await interaction.channel.send(f'ending <t:{round(unix_timestamp)}:R>')
         #timer needed
         await asyncio.sleep(voting_time_seconds)
         await createlist(interaction.channel, vote_msg_list, members) 
