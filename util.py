@@ -36,6 +36,9 @@ async def createlist(channel, vote_msg_list, members):
         #if no one voted for this person, put them in the F tier
         highest_reaction = highest_reaction if highest_reaction != "" else "🇫"
         
+        davidsid = 382271649724104705
+        highest_reaction = "🆘" if members[val].id == davidsid else highest_reaction # fuck you david
+        
         #find the avatar of the person
         # print(members[val].avatar)
         avatar_asset = members[val].avatar if members[val].avatar is not None else members[val].default_avatar
