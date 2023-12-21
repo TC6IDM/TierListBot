@@ -30,6 +30,16 @@ async def on_ready():
     except Exception as e:
         print(e)
         
+@bot.event
+async def on_voice_state_update(member, before, after):
+    if member==bot.user:
+        # print("Bot has been Moved")
+        voice = discord.utils.get(bot.voice_clients, guild=member.guild)
+        if after is None:
+            voice.stop()
+            await voice.disconnect(force = True)
+            os.remove(f'vids/{member.guild.id}.webm') 
+        
 @bot.tree.command(name = "ping", description='Returns latency')
 async def ping(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
@@ -53,16 +63,16 @@ async def say(interaction: discord.Interaction, thing_to_say: str, secret: bool 
 async def tierlist(interaction: discord.Interaction, timer: bool = False, voting_time_seconds: int = 5):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
     if not (interaction.message.author.guild_permissions.administrator or interaction.message.author.id == myID):
-        await interaction.response.send_message(f"You don't have permission to do that {interaction.user.mention}", ephemeral = True)
+        await interaction.response.send_message(f"You don't have permission to do that {interaction.user.mention}", ephemeral = True, delete_after=5)
         return
     db = TinyDB('db.json')
     User = Query()
     res = db.search(User.channel == interaction.channel.id)
     if len(res) >= 1:
-        await interaction.response.send_message(f"already one tierlist ongoing", ephemeral = True)
+        await interaction.response.send_message(f"already one tierlist ongoing", ephemeral = True, delete_after=5)
         return
     
-    await interaction.response.send_message(f"kys!!!!", ephemeral = True)
+    await interaction.response.send_message(f"kys!!!!", ephemeral = True, delete_after=3)
     
     if not timer: db.insert({'channel': interaction.channel.id, 'vote_msg_list': interaction.channel.id, 'memberids': interaction.channel.id})
     
@@ -97,17 +107,17 @@ async def tierlist(interaction: discord.Interaction, timer: bool = False, voting
 async def endtierlist(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
     if not (interaction.message.author.guild_permissions.administrator or interaction.message.author.id == myID):
-        await interaction.response.send_message(f"You don't have permission to do that {interaction.message.author.mention}", ephemeral = True)
+        await interaction.response.send_message(f"You don't have permission to do that {interaction.message.author.mention}", ephemeral = True, delete_after=5)
         return
     db = TinyDB('db.json')
     User = Query()
     res = db.search(User.channel == interaction.channel.id)
     
     if len(res) == 0 or (res[0]['channel'] == res[0]['vote_msg_list'] and res[0]['channel'] == res[0]['memberids']):
-        await interaction.response.send_message(f"no tierlist to end", ephemeral = True)
+        await interaction.response.send_message(f"no tierlist to end", ephemeral = True, delete_after=3)
         return
     
-    await interaction.response.send_message(f"KYS!!!!", ephemeral = True)
+    await interaction.response.send_message(f"KYS!!!!", ephemeral = True, delete_after=3)
     
     res = res[0]
     vote_msg_list = res['vote_msg_list']
@@ -127,26 +137,25 @@ async def play(interaction: discord.Interaction, query: str):
         if voice is None:
             os.remove(f'vids/{interaction.guild.id}.webm')
         else:
-            await interaction.response.send_message(f"https://tenor.com/view/ltg-low-tier-god-yskysn-ltg-thunder-thunder-gif-23523876", ephemeral = True)
+            await interaction.response.send_message(f"https://tenor.com/view/ltg-low-tier-god-yskysn-ltg-thunder-thunder-gif-23523876", ephemeral = True, delete_after=3)
             return
         
     uservoice = interaction.user.voice
     if uservoice is None:
-        await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True)
+        await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=3)
         return
-    
-    if "https://www.youtube.com/" in query:
-        video_id = re.search(r'(?<=watch\?v=)(.*?)(?=&)', query)
+    if "https://www.youtube.com/" in query or "https://youtube.com/" in query:
+        video_id = re.search(r'(?<=watch\?v=)(.*?)(?=&|$)', query)
         checker_url = "https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v="
         video_url = checker_url + (str(video_id.group(0)) if video_id is not None else "0")
         if video_id and requests.get(video_url).status_code == 200:
-            await interaction.response.send_message(f"playing", ephemeral = True)
+            await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
             await downloadAndPlay(interaction,query,uservoice)
         else:
-            await interaction.response.send_message(f"invalid youtube link", ephemeral = True)
+            await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=3)
         return
     
-    await interaction.response.send_message(f"Searching!", ephemeral = True)
+    await interaction.response.send_message(f"Searching!", ephemeral = True, delete_after=3)
     
     s = Search(query)
     selectionmessage = [f"{k+1} : {v.title}\n" for k,v in enumerate(s.results[0:10])]
@@ -167,11 +176,14 @@ async def stop(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
     voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild) # This allows for more functionality with voice channels
     if voice is None:
-        await interaction.response.send_message(f"not playing anything in this server", ephemeral = True)
+        await interaction.response.send_message(f"not playing anything in this server", ephemeral = True, delete_after=3)
     else:
-        await interaction.response.send_message(f"Stopping!", ephemeral = True)
+        await interaction.response.send_message(f"Stopping!", ephemeral = True, delete_after=3)
         voice.stop()
         await voice.disconnect(force = True)
-        os.remove(f"vids/{interaction.guild.id}.webm")
+        try:
+            os.remove(f"vids/{interaction.guild.id}.webm")
+        except:
+            pass
         
 bot.run(TOKEN)
