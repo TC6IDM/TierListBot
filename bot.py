@@ -138,7 +138,6 @@ async def play(interaction: discord.Interaction, query: str):
     if "https://www.youtube.com/" in query:
         video_id = re.search(r'(?<=watch\?v=)(.*?)(?=&)', query)
         checker_url = "https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v="
-        # print(str(video_id.group(0)))
         video_url = checker_url + (str(video_id.group(0)) if video_id is not None else "0")
         if video_id and requests.get(video_url).status_code == 200:
             await interaction.response.send_message(f"playing", ephemeral = True)
@@ -175,6 +174,4 @@ async def stop(interaction: discord.Interaction):
         await voice.disconnect(force = True)
         os.remove(f"vids/{interaction.guild.id}.webm")
         
-        
-    
 bot.run(TOKEN)

@@ -119,7 +119,7 @@ async def downloadAndPlay(interaction, videourl,uservoice):
         if uservoice.channel is None:
             await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True)
             return
-        vc = await uservoice.channel.connect()
+        vc = await uservoice.channel.connect(reconnect = False)
         while not os.path.exists(f'vids/{interaction.guild.id}.webm'):
             await asyncio.sleep(1)
         vc.play(discord.FFmpegPCMAudio(f'vids/{interaction.guild.id}.webm'), after=lambda e: print('done', e))
