@@ -1,7 +1,10 @@
+import asyncio
 from PIL import Image, ImageDraw, ImageFont
 import io
 from discord import File
-
+import discord
+import yt_dlp
+import os
 async def createlist(channel, vote_msg_list, members):
     '''
     Creates a tier list based on the votes and sends it to the channel
@@ -61,3 +64,72 @@ async def createlist(channel, vote_msg_list, members):
     # send image
     await channel.send(file=File(buffer_output, 'myimage.png'))
     # await channel.send(finalmessage[0:-1])
+    
+    
+def my_hook(d):
+    if d['status'] == 'finished':
+        # print(d['filepath'])
+        # print('Done downloading, now post-processing ...')
+        pass
+
+class MyLogger:
+    def debug(self, msg):
+        # For compatibility with youtube-dl, both debug and info are passed into debug
+        # You can distinguish them by the prefix '[debug] '
+        if msg.startswith('[debug] '):
+            pass
+        else:
+            self.info(msg)
+
+    def info(self, msg):
+        pass
+
+    def warning(self, msg):
+        pass
+
+    def error(self, msg):
+        print(msg)
+        
+COOKIE_FILE = 'www.youtube.com_cookies.txt'
+
+
+async def downloadAndPlay(interaction, videourl,uservoice):
+        await interaction.channel.send(f"Playing {videourl}")
+        ydl_opts = {
+            'format': 'webm/bestaudio/best',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'webm',
+                'preferredquality': '320',#highest quality
+            },{
+                'key': 'FFmpegMetadata',
+                'add_metadata': True,
+            }],
+            'ignoreerrors': True, #ignore errors
+            'outtmpl': '/vids/'+str(interaction.guild.id)+'.%(ext)s', #save songs here .%(ext)s
+
+            'logger': MyLogger(),
+            'progress_hooks': [my_hook],
+            'cookiefile': COOKIE_FILE, #cookies for downloading age restricted videos
+            }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download(videourl)
+        
+        # create StreamPlayer
+        if uservoice.channel is None:
+            await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True)
+            return
+        vc = await uservoice.channel.connect()
+        while not os.path.exists(f'vids/{interaction.guild.id}.webm'):
+            await asyncio.sleep(1)
+        vc.play(discord.FFmpegPCMAudio(f'vids/{interaction.guild.id}.webm'), after=lambda e: print('done', e))
+        # player = vc.create_ffmpeg_player('vuvuzela.webm', after=lambda: print('done'))
+        # print(vc.is_playing())
+        while vc.is_playing():
+            await asyncio.sleep(1)
+        # disconnect after the player has finished
+        vc.stop()
+        await vc.disconnect(force = True)
+        os.remove(f'vids/{interaction.guild.id}.webm')
+        
+        # await interaction.channel.send(s.results[ints[0]].watch_url)

@@ -1,3 +1,4 @@
+#python -u "c:\Users\Owner\Desktop\TierListBot\TierListBot\bot.py"
 import asyncio
 import discord
 import os
@@ -5,47 +6,20 @@ from dotenv import load_dotenv
 from discord import app_commands
 from discord.ext import commands
 from unicodedata import lookup
-from discord import File
 from requests import get
+import requests
 from tinydb import TinyDB, Query, where
 from discord.ui import Select, View
-import time
 import datetime
-from PIL import Image, ImageDraw, ImageFont
-import io
 from pytube import Search
-import yt_dlp
-from util import createlist
+from util import *
+import re
 
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
 bot = commands.Bot(command_prefix='!', intents = discord.Intents.all())
 myID = 281911981089226762
 
-def my_hook(d):
-    if d['status'] == 'finished':
-        # print(d['filepath'])
-        print('Done downloading, now post-processing ...')
-
-class MyLogger:
-    def debug(self, msg):
-        # For compatibility with youtube-dl, both debug and info are passed into debug
-        # You can distinguish them by the prefix '[debug] '
-        if msg.startswith('[debug] '):
-            pass
-        else:
-            self.info(msg)
-
-    def info(self, msg):
-        pass
-
-    def warning(self, msg):
-        pass
-
-    def error(self, msg):
-        print(msg)
-        
-COOKIE_FILE = 'www.youtube.com_cookies.txt'
 
 @bot.event
 async def on_ready():
@@ -55,12 +29,6 @@ async def on_ready():
         print(f"Synced {len(synced)} command(s)")
     except Exception as e:
         print(e)
-
-# @bot.event
-# async def on_voice_state_update(member, before, after):
-#     if after.channel is None and member==bot.user:
-#         print("Bot has been Disconnected")
-#         await os.remove("vids/music.mp3")
         
 @bot.tree.command(name = "ping", description='Returns latency')
 async def ping(interaction: discord.Interaction):
@@ -123,9 +91,6 @@ async def tierlist(interaction: discord.Interaction, timer: bool = False, voting
             ({'vote_msg_list': vote_msg_list}, where('channel') == interaction.channel.id),
             ({'memberids': memberids}, where('channel') == interaction.channel.id),
             ])
-        # db.update(set('vote_msg_list',vote_msg_list), User.channel == interaction.channel.id)
-        # db.update(set('memberids',memberids), User.channel == interaction.channel.id)
-        # db.insert({'channel': interaction.channel.id, 'vote_msg_list': vote_msg_list, 'memberids': memberids})
         return
         
 @bot.tree.command(name = "endtierlist", description='ends voting for the Teir List')
@@ -156,81 +121,47 @@ async def endtierlist(interaction: discord.Interaction):
 @app_commands.describe(query = "looks up the song")
 async def play(interaction: discord.Interaction, query: str):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
-    if os.path.exists(f'vids/{interaction.guild.id}.mp3'):
+    
+    if os.path.exists(f'vids/{interaction.guild.id}.webm'):
         voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild) # This allows for more functionality with voice channels
         if voice is None:
-            os.remove(f'vids/{interaction.guild.id}.mp3')
+            os.remove(f'vids/{interaction.guild.id}.webm')
         else:
             await interaction.response.send_message(f"https://tenor.com/view/ltg-low-tier-god-yskysn-ltg-thunder-thunder-gif-23523876", ephemeral = True)
             return
+        
     uservoice = interaction.user.voice
     if uservoice is None:
         await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True)
         return
+    
+    if "https://www.youtube.com/" in query:
+        video_id = re.search(r'(?<=watch\?v=)(.*?)(?=&)', query)
+        checker_url = "https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v="
+        # print(str(video_id.group(0)))
+        video_url = checker_url + (str(video_id.group(0)) if video_id is not None else "0")
+        if video_id and requests.get(video_url).status_code == 200:
+            await interaction.response.send_message(f"playing", ephemeral = True)
+            await downloadAndPlay(interaction,query,uservoice)
+        else:
+            await interaction.response.send_message(f"invalid youtube link", ephemeral = True)
+        return
+    
     await interaction.response.send_message(f"Searching!", ephemeral = True)
+    
     s = Search(query)
-    # strcat = ""
     selectionmessage = [f"{k+1} : {v.title}\n" for k,v in enumerate(s.results[0:10])]
-    #[discord.SelectOption(label = f'{k+1} - {v.title}', description= f"length {v.length}") for k,v in enumerate(s.results[0:10])]
     select = Select(options = [discord.SelectOption(label = f'{k+1}: {v.title}'[:99] if len(f'{k+1} - {v.title}') > 99 else f'{k+1} - {v.title}', description = f"{v.watch_url}", value=k) for k,v in enumerate(s.results[0:10])])
     
     async def my_mycallback(ints):
-        # print(ints)
         await newint.delete()
         videourl = s.results[int(select.values[0])].watch_url
-        await interaction.channel.send(f"Playing {videourl}")
-        ydl_opts = {
-            'format': 'mp3/bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '320',#highest quality
-            },{
-                'key': 'FFmpegMetadata',
-                'add_metadata': True,
-            }],
-            'ignoreerrors': True, #ignore errors
-            # 'outtmpl': '/vids/(%(video_autonumber)s) %(uploader)s - %(title)s.%(ext)s', #save songs here .%(ext)s
-            'outtmpl': '/vids/'+str(interaction.guild.id)+'.%(ext)s', #save songs here .%(ext)s
-
-            # 'outtmpl': dir_path2+"("+getzeros(int('%(video_autonumber)s'),int('%(playlist_count)s'))+') '+ removePunctuation("%(uploader)s")+ ' - ' +removePunctuation("%(title)s") +'.%(ext)s', #save songs here .%(ext)s
-            'logger': MyLogger(),
-            'progress_hooks': [my_hook],
-            'cookiefile': COOKIE_FILE, #cookies for downloading age restricted videos
-            }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download(videourl)
-        
-        # create StreamPlayer
-        if uservoice.channel is None:
-            await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True)
-            return
-        vc = await uservoice.channel.connect()
-        while not os.path.exists(f'vids/{interaction.guild.id}.mp3'):
-            await asyncio.sleep(1)
-        
-        vc.play(discord.FFmpegPCMAudio(f'vids/{interaction.guild.id}.mp3'), after=lambda e: print('done', e))
-        # player = vc.create_ffmpeg_player('vuvuzela.mp3', after=lambda: print('done'))
-        # print(vc.is_playing())
-        while vc.is_playing():
-            await asyncio.sleep(1)
-        # disconnect after the player has finished
-        vc.stop()
-        await vc.disconnect()
-        os.remove(f'vids/{interaction.guild.id}.mp3')
-        
-        # await interaction.channel.send(s.results[ints[0]].watch_url)
+        await downloadAndPlay(interaction,videourl,uservoice)
     
     select.callback = my_mycallback
     view = View()
     view.add_item(select)
     newint = await interaction.channel.send(f'```'+''.join(map(str, selectionmessage))+'```',view=view)
-    try:
-        newint.respond()
-    except:
-        pass
-    # for r in numbers.keys():
-    #     await interactionmessage.add_reaction(r)
 
 @bot.tree.command(name = "stop", description='stops music?')
 async def stop(interaction: discord.Interaction):
@@ -241,11 +172,8 @@ async def stop(interaction: discord.Interaction):
     else:
         await interaction.response.send_message(f"Stopping!", ephemeral = True)
         voice.stop()
-        await voice.disconnect()
-        try:
-            os.remove(f"vids/{interaction.guild.id}.mp3")
-        except:
-            pass
+        await voice.disconnect(force = True)
+        os.remove(f"vids/{interaction.guild.id}.webm")
         
         
     
