@@ -1,4 +1,5 @@
 .env
 db.json
+queue.json
 www.youtube.com_cookies.txt
 /vids

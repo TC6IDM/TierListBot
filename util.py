@@ -1,19 +1,39 @@
 import asyncio
 from datetime import timedelta
 import datetime
+import glob
 import re
+import shutil
 from PIL import Image, ImageDraw, ImageFont
 import io
 from bs4 import BeautifulSoup
-from discord import Client, File, Interaction, VoiceState
+from discord import Client, File, Interaction, VoiceClient, VoiceState
 import discord
 import requests
+from tinydb import Query, TinyDB
 import yt_dlp
 import os
 import ffmpeg
 from pytube import YouTube
 from pytube import Search
+import asyncio
+from tinydb import TinyDB, Query, where
+import os
+from pathlib import Path
+song_queue = []
 
+async def play_next(interaction: Interaction[Client], source):
+    vc = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild)
+    if len(song_queue) >= 1:
+        del song_queue[0]
+        vc.play(discord.FFmpegPCMAudio(source=source, after=lambda e: play_next(interaction)))
+    else:
+        await interaction.channel.send("No more songs in queue.")
+        # asyncio.sleep(90) #wait 1 minute and 30 seconds
+        # if not vc.is_playing():
+        #     asyncio.run_coroutine_threadsafe(vc.disconnect(interaction), interaction.client.loop)
+        #     asyncio.run_coroutine_threadsafe(interaction.send("No more songs in queue."), interaction.client.loop)
+            
 class SimpleView(discord.ui.View):
     
     def __init__(self, vc: discord.VoiceClient):
@@ -23,21 +43,28 @@ class SimpleView(discord.ui.View):
     @discord.ui.button(label='Pause', style=discord.ButtonStyle.grey, custom_id="Pause")
     async def Pause(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message('Pausing', ephemeral=True, delete_after=3)
-        if self.vc.is_playing(): self.vc.pause()
+        if self.vc.is_playing(): 
+            self.vc.pause()
+            print("PAUSED!")
     
     @discord.ui.button(label='Play', style=discord.ButtonStyle.green, custom_id="Play")
     async def Play(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message('Playing', ephemeral=True, delete_after=3)
-        if self.vc.is_paused(): self.vc.resume()
+        if self.vc.is_paused(): 
+            self.vc.resume()
+            print("RESUMED!")
         
-    @discord.ui.button(label='Skip', style=discord.ButtonStyle.blurple, custom_id="Skip")
-    async def Skip(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message('Skipping', ephemeral=True, delete_after=3)
-        self.vc.stop()
+    # @discord.ui.button(label='Skip', style=discord.ButtonStyle.blurple, custom_id="Skip")
+    # async def Skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+    #     await interaction.response.send_message('Skipping', ephemeral=True, delete_after=3)
+    ##delete entire queue then .stop it
+    #     self.vc.stop()
         
     @discord.ui.button(label='Stop', style=discord.ButtonStyle.red, custom_id="Stop")
     async def Stop(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message('Stopping', ephemeral=True, delete_after=3)
+        queue = TinyDB('queue.json')
+        queue.update({'queue': []}, where('server') == interaction.guild.id)
         self.vc.stop()
 
 
@@ -132,8 +159,31 @@ class MyLogger:
         
 COOKIE_FILE = 'www.youtube.com_cookies.txt'
 
-async def downloadAndPlay(interaction: Interaction[Client], videourl: str, uservoice: VoiceState):
+async def download(interaction: Interaction[Client], videourl: str, uservoice: VoiceState):
     # await interaction.channel.send(f"Playing {videourl}")
+    voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild)
+    
+    
+    output = '/vids/'+str(interaction.guild.id)+'.%(ext)s'
+    dir_path = 'C:/Users/Owner/Desktop/TierListBot/TierListBot/vids/'+str(interaction.guild.id)+"_queue/"
+    isExist = os.path.exists(dir_path)
+    if not isExist:
+    # Create a new directory because it does not exist
+        os.makedirs(dir_path)
+    
+    # paths = sorted(Path(dir_path).iterdir(), key=os.path.getmtime)
+    
+    if voice is not None:
+        files = os.listdir(dir_path)
+        os.chdir(dir_path)
+        files.sort(key=os.path.getctime)
+        # if len(files) >=1: print(files[-1])
+        queNumber = int(re.search(r'^(.*?)(?=\.)', files[-1]).group(0))+1 if len(files) >=1 else 0
+        output = '/vids/'+str(interaction.guild.id)+'_queue/'+str(queNumber)+'.%(ext)s'
+        os.chdir('C:/Users/Owner/Desktop/TierListBot/TierListBot')
+        pass
+    
+    
     ydl_opts = {
         'format': 'webm/bestaudio/best',
         'postprocessors': [{
@@ -145,8 +195,7 @@ async def downloadAndPlay(interaction: Interaction[Client], videourl: str, userv
             'add_metadata': True,
         }],
         'ignoreerrors': True, #ignore errors
-        'outtmpl': '/vids/'+str(interaction.guild.id)+'.%(ext)s', #save songs here .%(ext)s
-
+        'outtmpl': output, #save songs here .%(ext)s
         'logger': MyLogger(),
         'progress_hooks': [my_hook],
         'cookiefile': COOKIE_FILE, #cookies for downloading age restricted videos
@@ -154,17 +203,20 @@ async def downloadAndPlay(interaction: Interaction[Client], videourl: str, userv
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download(videourl)
         
-    # create StreamPlayer
-    if uservoice.channel is None:
-        await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=5)
-        return
-    vc = await uservoice.channel.connect(reconnect = False)
+    
+async def play(interaction: Interaction[Client], videourl: str, uservoice: VoiceState, vc: VoiceClient = None):
+    voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild)
+    if voice is None:
+        vc = await uservoice.channel.connect(reconnect = False)
+        
     while not os.path.exists(f'vids/{interaction.guild.id}.webm'):
         await asyncio.sleep(1)
     
     thumbnailURL = "https://img.youtube.com/vi/"+str(re.search(r'(?<=watch\?v=)(.*?)(?=&|$)', videourl).group(0))+"/maxresdefault.jpg"
+    sr = Search(videourl).results
+    trackname = sr[0].title[:20] if len(sr) > 0 else "Unknown"
     track_info = {
-        'Track': Search(videourl).results[0].title[:20], #slow as fuck but who cares lmao
+        'Track': trackname, #slow as fuck but who cares lmao check if there is no results
         'Requested By': interaction.user.mention,
         'Duration': str(timedelta(seconds=int(float(ffmpeg.probe("vids/"+str(interaction.guild.id)+".webm")["format"]["duration"]))))
     }
@@ -186,21 +238,83 @@ async def downloadAndPlay(interaction: Interaction[Client], videourl: str, userv
     # view.add_item(discord.ui.Button(label="Skip", style=discord.ButtonStyle.grey, custom_id="skip"))
     # view.add_item(discord.ui.Button(label="Stop", style=discord.ButtonStyle.red, custom_id="stop"))
     
-    musicembed = await interaction.channel.send(embed=embed, view=view)    
+    #edit instead?????
+    musicembed = await interaction.channel.send(embed=embed, view=view)
     
     # , after=lambda e: print('done', e)
+    #, after=lambda e: play_next(interaction,f'vids/{interaction.guild.id}.webm')
     vc.play(discord.FFmpegPCMAudio(f'vids/{interaction.guild.id}.webm'))
     # player = vc.create_ffmpeg_player('vuvuzela.webm', after=lambda: print('done'))
     # print(vc.is_playing())
-    while vc.is_playing() or vc.is_paused():
+    
+    while (vc.is_playing() or vc.is_paused()) and vc.is_connected():
         await asyncio.sleep(1)
     # disconnect after the player has finished
+    if not vc.is_connected(): 
+        print("someone forced the bot to leave the channel :(")
+        await vc.disconnect(force = True)
+        queue = TinyDB('queue.json')
+        queue.update({'queue': []}, where('server') == interaction.guild.id)
+    
+    return vc,musicembed
+    
+async def downloadAndPlay(interaction: Interaction[Client], videourl: str, uservoice: VoiceState):
+    # create StreamPlayer
+    if uservoice.channel is None:
+        await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=5)
+        return
+    # voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild)
+    await download(interaction,videourl,uservoice)
+    # print(voice)
+    # if voice is not None: return
+    
+    queue = TinyDB('queue.json')
+    User = Query()
+    res = queue.search(User.server == interaction.guild.id)
+    vc = None
+    while (len(res[0]['queue']) >=1):
+        # print(videourl)
+        videourl = res[0]['queue'][0]
+        vc,musicembed = await play(interaction,videourl,uservoice,vc)
+        vc.stop()
+        await musicembed.delete()
+        os.remove(f'vids/{interaction.guild.id}.webm')
+        dir_path = 'C:/Users/Owner/Desktop/TierListBot/TierListBot/vids/'+str(interaction.guild.id)+"_queue/"
+        isExist = os.path.exists(dir_path)
+        if not isExist:
+        # Create a new directory because it does not exist
+            os.makedirs(dir_path)
+
+        paths = os.listdir(dir_path)
+        os.chdir(dir_path)
+        paths.sort(key=os.path.getctime)
+        os.chdir('C:/Users/Owner/Desktop/TierListBot/TierListBot')
+        
+        if len(paths) >=1: 
+            os.rename(f'vids/{interaction.guild.id}_queue/{paths[0]}', f'vids/{interaction.guild.id}.webm')
+        else:
+            shutil.rmtree(f'vids/{interaction.guild.id}_queue')
+                
+        queue = TinyDB('queue.json')
+        User = Query()
+        res = queue.search(User.server == interaction.guild.id)
+        queue.update({'queue': res[0]['queue'][1:]}, where('server') == interaction.guild.id)
+        queue = TinyDB('queue.json')
+        User = Query()
+        res = queue.search(User.server == interaction.guild.id)
+    
     vc.stop()
     await vc.disconnect(force = True)
-    await musicembed.delete()
-    try:
-        os.remove(f'vids/{interaction.guild.id}.webm')
-    except:
-        pass
+    if (os.path.exists(f'vids/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
+    if (os.path.exists(f'vids/{interaction.guild.id}_queue')): shutil.rmtree(f'vids/{interaction.guild.id}_queue')
+    
         
-    # await interaction.channel.send(s.results[ints[0]].watch_url)
+def addtoQueue(interaction: Interaction[Client], videourl: str):
+    queue = TinyDB('queue.json')
+    User = Query()
+    res = queue.search(User.server == interaction.guild.id)
+    if len(res) == 0:
+        queue.insert({'server': interaction.guild.id, 'queue': [videourl]})
+        return
+    # print(res[0]['queue'])
+    queue.update({'queue': res[0]['queue']+[videourl]}, where('server') == interaction.guild.id)

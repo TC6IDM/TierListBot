@@ -1,5 +1,6 @@
 #python -u "c:\Users\Owner\Desktop\TierListBot\TierListBot\bot.py"
 import asyncio
+import shutil
 import discord
 import os
 from dotenv import load_dotenv
@@ -14,6 +15,7 @@ import datetime
 from pytube import Search
 from util import *
 import re
+from discord.ext.commands import cooldown, BucketType
 
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
@@ -30,15 +32,21 @@ async def on_ready():
     except Exception as e:
         print(e)
         
-@bot.event
-async def on_voice_state_update(member, before, after):
-    if member==bot.user:
-        # print("Bot has been Moved")
-        voice = discord.utils.get(bot.voice_clients, guild=member.guild)
-        if after is None:
-            voice.stop()
-            await voice.disconnect(force = True)
-            os.remove(f'vids/{member.guild.id}.webm') 
+# @bot.event
+# async def on_voice_state_update(member, before, after):
+#     if member==bot.user:
+#         print("Bot has been Moved")
+#         voice = discord.utils.get(bot.voice_clients, guild=member.guild)
+#         if after is None:
+#             queue = TinyDB('queue.json')
+#             queue.update({'queue': []}, where('server') == member.guild.id)
+#             voice.stop()
+
+@bot.tree.error
+async def on_app_command_error(interacton:discord.Interaction, error:app_commands.AppCommandError):
+    if isinstance(error, app_commands.CommandOnCooldown):
+        await interacton.response.send_message(f"This command is on cooldown, please retry in {round(error.retry_after, 2)} seconds. (when this message goes away)", ephemeral = True, delete_after=error.retry_after)
+    else: raise error
         
 @bot.tree.command(name = "ping", description='Returns latency')
 async def ping(interaction: discord.Interaction):
@@ -62,7 +70,7 @@ async def say(interaction: discord.Interaction, thing_to_say: str, secret: bool 
 @app_commands.describe(voting_time_seconds = "How long are we waiting for votes to come in? (seconds)")
 async def tierlist(interaction: discord.Interaction, timer: bool = False, voting_time_seconds: int = 5):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
-    if not (interaction.message.author.guild_permissions.administrator or interaction.message.author.id == myID):
+    if not (interaction.user.guild_permissions.administrator or interaction.user.id == myID):
         await interaction.response.send_message(f"You don't have permission to do that {interaction.user.mention}", ephemeral = True, delete_after=5)
         return
     db = TinyDB('db.json')
@@ -76,7 +84,7 @@ async def tierlist(interaction: discord.Interaction, timer: bool = False, voting
     
     if not timer: db.insert({'channel': interaction.channel.id, 'vote_msg_list': interaction.channel.id, 'memberids': interaction.channel.id})
     
-    members = [x for x in interaction.channel.members if not x.bot]
+    members = [x for x in interaction.channel.members if (not x.bot and x.id != 704872368572465163) or x.id == 1186185707258134560]
     vote_msg_list = []
     for member in members:
         vote_msg = await interaction.channel.send(f'Where should {member.global_name if member.global_name is not None else member.name} be placed?')
@@ -106,7 +114,7 @@ async def tierlist(interaction: discord.Interaction, timer: bool = False, voting
 @bot.tree.command(name = "endtierlist", description='ends voting for the Teir List')
 async def endtierlist(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
-    if not (interaction.message.author.guild_permissions.administrator or interaction.message.author.id == myID):
+    if not (interaction.user.guild_permissions.administrator or interaction.user.id == myID):
         await interaction.response.send_message(f"You don't have permission to do that {interaction.message.author.mention}", ephemeral = True, delete_after=5)
         return
     db = TinyDB('db.json')
@@ -114,7 +122,7 @@ async def endtierlist(interaction: discord.Interaction):
     res = db.search(User.channel == interaction.channel.id)
     
     if len(res) == 0 or (res[0]['channel'] == res[0]['vote_msg_list'] and res[0]['channel'] == res[0]['memberids']):
-        await interaction.response.send_message(f"no tierlist to end", ephemeral = True, delete_after=3)
+        await interaction.response.send_message(f"no tierlist to end", ephemeral = True, delete_after=5)
         return
     
     await interaction.response.send_message(f"KYS!!!!", ephemeral = True, delete_after=3)
@@ -129,30 +137,39 @@ async def endtierlist(interaction: discord.Interaction):
 
 @bot.tree.command(name = "play", description='plays music?')
 @app_commands.describe(query = "looks up the song")
+@app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
 async def play(interaction: discord.Interaction, query: str):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
     
-    if os.path.exists(f'vids/{interaction.guild.id}.webm'):
-        voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild) # This allows for more functionality with voice channels
-        if voice is None:
-            os.remove(f'vids/{interaction.guild.id}.webm')
-        else:
-            await interaction.response.send_message(f"https://tenor.com/view/ltg-low-tier-god-yskysn-ltg-thunder-thunder-gif-23523876", ephemeral = True, delete_after=3)
-            return
-        
+    voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild) # This allows for more functionality with voice channels
+    queue = TinyDB('queue.json')
+    User = Query()
+    res = queue.search(User.server == interaction.guild.id)
+    
+    if (os.path.exists(f'vids/{interaction.guild.id}.webm') or os.path.exists(f'vids/{interaction.guild.id}_queue') or len(res[0]['queue']) >=1) and voice is None:
+        if (os.path.exists(f'vids/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
+        if (os.path.exists(f'vids/{interaction.guild.id}_queue')): shutil.rmtree(f'vids/{interaction.guild.id}_queue')
+        queue.update({'queue': []}, where('server') == interaction.guild.id)
+    
     uservoice = interaction.user.voice
     if uservoice is None:
-        await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=3)
+        await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=5)
         return
     if "https://www.youtube.com/" in query or "https://youtube.com/" in query:
         video_id = re.search(r'(?<=watch\?v=)(.*?)(?=&|$)', query)
         checker_url = "https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v="
         video_url = checker_url + (str(video_id.group(0)) if video_id is not None else "0")
         if video_id and requests.get(video_url).status_code == 200:
-            await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
-            await downloadAndPlay(interaction,query,uservoice)
+            query = f'https://www.youtube.com/watch?v={str(video_id.group(0))}'
+            addtoQueue(interaction,query)
+            if voice is None:
+                await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
+                await downloadAndPlay(interaction,query,uservoice)
+            else:
+                await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
+                await download(interaction,query,uservoice)
         else:
-            await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=3)
+            await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
         return
     
     await interaction.response.send_message(f"Searching!", ephemeral = True, delete_after=3)
@@ -164,26 +181,33 @@ async def play(interaction: discord.Interaction, query: str):
     async def my_mycallback(ints):
         await newint.delete()
         videourl = s.results[int(select.values[0])].watch_url
-        await downloadAndPlay(interaction,videourl,uservoice)
+        addtoQueue(interaction,videourl)
+        #runqueue instead
+        if voice is None:
+            # await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
+            await downloadAndPlay(interaction,videourl,uservoice)
+        else:
+            # await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
+            await download(interaction,videourl,uservoice)
     
     select.callback = my_mycallback
     view = View()
     view.add_item(select)
     newint = await interaction.channel.send(f'```'+''.join(map(str, selectionmessage))+'```',view=view)
 
-@bot.tree.command(name = "stop", description='stops music?')
-async def stop(interaction: discord.Interaction):
-    print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
-    voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild) # This allows for more functionality with voice channels
-    if voice is None:
-        await interaction.response.send_message(f"not playing anything in this server", ephemeral = True, delete_after=3)
-    else:
-        await interaction.response.send_message(f"Stopping!", ephemeral = True, delete_after=3)
-        voice.stop()
-        await voice.disconnect(force = True)
-        try:
-            os.remove(f"vids/{interaction.guild.id}.webm")
-        except:
-            pass
+# @bot.tree.command(name = "stop", description='stops music?')
+# async def stop(interaction: discord.Interaction):
+#     print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
+#     voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild) # This allows for more functionality with voice channels
+#     if voice is None:
+#         await interaction.response.send_message(f"not playing anything in this server", ephemeral = True, delete_after=5)
+#     else:
+#         await interaction.response.send_message(f"Stopping!", ephemeral = True, delete_after=3)
+#         voice.stop()
+#         # await voice.disconnect(force = True)
+#         # try:
+#         #     os.remove(f"vids/{interaction.guild.id}.webm")
+#         # except:
+#         #     pass
         
 bot.run(TOKEN)
