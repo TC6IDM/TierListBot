@@ -54,11 +54,10 @@ class SimpleView(discord.ui.View):
             self.vc.resume()
             print("RESUMED!")
         
-    # @discord.ui.button(label='Skip', style=discord.ButtonStyle.blurple, custom_id="Skip")
-    # async def Skip(self, interaction: discord.Interaction, button: discord.ui.Button):
-    #     await interaction.response.send_message('Skipping', ephemeral=True, delete_after=3)
-    ##delete entire queue then .stop it
-    #     self.vc.stop()
+    @discord.ui.button(label='Skip', style=discord.ButtonStyle.blurple, custom_id="Skip")
+    async def Skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message('Skipping', ephemeral=True, delete_after=3)
+        self.vc.stop()
         
     @discord.ui.button(label='Stop', style=discord.ButtonStyle.red, custom_id="Stop")
     async def Stop(self, interaction: discord.Interaction, button: discord.ui.Button):
