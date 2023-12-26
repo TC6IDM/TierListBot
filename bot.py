@@ -174,6 +174,10 @@ async def play(interaction: discord.Interaction, query: str):
         if video_id and requests.get(video_url).status_code == 200:
             query = f'https://www.youtube.com/watch?v={str(video_id.group(0))}'
             videoObj = Search(query).results[0]
+            
+            if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None:
+                await interaction.response.send_message(f'You can not play live videos on the bot, Try Again', ephemeral=True, delete_after=7)
+                return
             if videoObj.length_seconds > MAXVIDEOLENGTH:
                 await interaction.response.send_message(f"Video is too long, go fuck yourself.", ephemeral = True, delete_after=7)
                 return
@@ -210,6 +214,9 @@ async def play(interaction: discord.Interaction, query: str):
             await ints.response.send_message(f"You cant select this video, you did not search it", ephemeral = True, delete_after=7)
             return
         videoObj = s.results[int(select.values[0])]
+        if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None:
+            await ints.response.send_message(f'You can not play live videos on the bot, Try Again', ephemeral=True, delete_after=7)
+            return
         if videoObj.length_seconds > MAXVIDEOLENGTH:
             await ints.response.send_message(f"Video is too long, go fuck yourself.", ephemeral = True, delete_after=7)
             return

@@ -22,8 +22,7 @@ import asyncio
 from tinydb import TinyDB, Query, where
 import os
 from pathlib import Path
-
-song_queue = []
+# song_queue = []
 
 # async def play_next(interaction: Interaction[Client], source):
 #     vc = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild)
@@ -42,6 +41,7 @@ class SimpleView(discord.ui.View):
     def __init__(self, vc: discord.VoiceClient):
         super().__init__()
         self.vc = vc
+        self.LOOP = 0
         
     @discord.ui.button(label='Pause', style=discord.ButtonStyle.grey, custom_id="Pause")
     async def Pause(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -71,12 +71,26 @@ class SimpleView(discord.ui.View):
         
     @discord.ui.button(label='Loop', style=discord.ButtonStyle.blurple, custom_id="Loop")
     async def Loop(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message('Looping (Work in progress, does not work rn :(', ephemeral=True, delete_after=3)
+        if self.LOOP == 0:
+            self.LOOP = 1 
+            await interaction.response.send_message('Looping', ephemeral=True, delete_after=3)
+        else:
+            self.LOOP = 0
+            await interaction.response.send_message('Unlooping', ephemeral=True, delete_after=3)
         # self.vc.stop()
-
-def visual_length(s):
-    # Calculate visual length considering variable-width characters
-    return sum(1 + (c > '\x7F') for c in s)
+        
+    # @discord.ui.button(label='Shuffle', style=discord.ButtonStyle.blurple, custom_id="Shuffle")
+    # async def Shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
+    #     if self.LOOP == 0:
+    #         self.LOOP = 1 
+    #         await interaction.response.send_message('Looping', ephemeral=True, delete_after=3)
+    #     else:
+    #         self.LOOP = 0
+    #         await interaction.response.send_message('Unlooping', ephemeral=True, delete_after=3)
+        # self.vc.stop()
+# def visual_length(s):
+#     # Calculate visual length considering variable-width characters
+#     return sum(1 + (c > '\x7F') for c in s)
 
 async def createlist(channel: TextChannel, vote_msg_list, members):
     '''
@@ -264,13 +278,16 @@ async def play(interaction: Interaction[Client], queinfo, uservoice: VoiceState,
     
     # , after=lambda e: print('done', e)
     #, after=lambda e: play_next(interaction,f'vids/{interaction.guild.id}.webm')
-    vc.play(discord.FFmpegPCMAudio(f'vids/{interaction.guild.id}.webm'))
-    # player = vc.create_ffmpeg_player('vuvuzela.webm', after=lambda: print('done'))
-    # print(vc.is_playing())
-    
-    while (vc.is_playing() or vc.is_paused()) and vc.is_connected():
-        await asyncio.sleep(1)
-    # disconnect after the player has finished
+    debounce = 0 
+    while debounce == 0 or view.LOOP == 1:
+        debounce=1
+        vc.play(discord.FFmpegPCMAudio(f'vids/{interaction.guild.id}.webm'))
+        # player = vc.create_ffmpeg_player('vuvuzela.webm', after=lambda: print('done'))
+        # print(vc.is_playing())
+        
+        while (vc.is_playing() or vc.is_paused()) and vc.is_connected():
+            await asyncio.sleep(1)
+        # disconnect after the player has finished
     if not vc.is_connected(): 
         print("someone forced the bot to leave the channel :(")
         await vc.disconnect(force = True)
@@ -299,6 +316,7 @@ async def downloadAndPlay(interaction: Interaction[Client], videourl: str, userv
         vc,musicembed = await play(interaction,queinfo,uservoice,vc)
         vc.stop()
         await musicembed.delete()
+        
         os.remove(f'vids/{interaction.guild.id}.webm')
         dir_path = 'C:/Users/Owner/Desktop/TierListBot/TierListBot/vids/'+str(interaction.guild.id)+"_queue/"
         isExist = os.path.exists(dir_path)
