@@ -1,0 +1,22 @@
+MUSIC BOT:
+
+
+dont allow live videos or other bad inputs like long videos
+
+view queue
+
+playlist support
+
+loop
+
+shuffle
+
+volume controls
+
+
+TIERLIST:
+
+
+OVERALL:
+
+document commands better

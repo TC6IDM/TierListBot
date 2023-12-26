@@ -2,13 +2,15 @@ import asyncio
 from datetime import timedelta
 import datetime
 import glob
+import json
 import re
 import shutil
 from PIL import Image, ImageDraw, ImageFont
 import io
 from bs4 import BeautifulSoup
-from discord import Client, File, Interaction, VoiceClient, VoiceState
+from discord import Client, File, Interaction, TextChannel, VoiceClient, VoiceState
 import discord
+import jsonpickle
 import requests
 from tinydb import Query, TinyDB
 import yt_dlp
@@ -20,19 +22,20 @@ import asyncio
 from tinydb import TinyDB, Query, where
 import os
 from pathlib import Path
+
 song_queue = []
 
-async def play_next(interaction: Interaction[Client], source):
-    vc = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild)
-    if len(song_queue) >= 1:
-        del song_queue[0]
-        vc.play(discord.FFmpegPCMAudio(source=source, after=lambda e: play_next(interaction)))
-    else:
-        await interaction.channel.send("No more songs in queue.")
-        # asyncio.sleep(90) #wait 1 minute and 30 seconds
-        # if not vc.is_playing():
-        #     asyncio.run_coroutine_threadsafe(vc.disconnect(interaction), interaction.client.loop)
-        #     asyncio.run_coroutine_threadsafe(interaction.send("No more songs in queue."), interaction.client.loop)
+# async def play_next(interaction: Interaction[Client], source):
+#     vc = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild)
+#     if len(song_queue) >= 1:
+#         del song_queue[0]
+#         vc.play(discord.FFmpegPCMAudio(source=source, after=lambda e: play_next(interaction)))
+#     else:
+#         await interaction.channel.send("No more songs in queue.")
+#         # asyncio.sleep(90) #wait 1 minute and 30 seconds
+#         # if not vc.is_playing():
+#         #     asyncio.run_coroutine_threadsafe(vc.disconnect(interaction), interaction.client.loop)
+#         #     asyncio.run_coroutine_threadsafe(interaction.send("No more songs in queue."), interaction.client.loop)
             
 class SimpleView(discord.ui.View):
     
@@ -65,13 +68,17 @@ class SimpleView(discord.ui.View):
         queue = TinyDB('queue.json')
         queue.update({'queue': []}, where('server') == interaction.guild.id)
         self.vc.stop()
-
+        
+    @discord.ui.button(label='Loop', style=discord.ButtonStyle.blurple, custom_id="Loop")
+    async def Loop(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message('Looping (Work in progress, does not work rn :(', ephemeral=True, delete_after=3)
+        # self.vc.stop()
 
 def visual_length(s):
     # Calculate visual length considering variable-width characters
     return sum(1 + (c > '\x7F') for c in s)
 
-async def createlist(channel, vote_msg_list, members):
+async def createlist(channel: TextChannel, vote_msg_list, members):
     '''
     Creates a tier list based on the votes and sends it to the channel
     
@@ -93,7 +100,11 @@ async def createlist(channel, vote_msg_list, members):
     
     #numerate through the members and vote messages
     for val, vote_msg in enumerate(vote_msg_list):
-        vote_msg = await channel.fetch_message(vote_msg)
+        try:
+            vote_msg = await channel.fetch_message(vote_msg)
+        except discord.errors.NotFound:
+            await channel.send("Error fetching tier list messages, some retard probably deleted them.",delete_after=10)
+            return
         highest_reaction = ""
         highest_reaction_number = 0
         for reaction in vote_msg.reactions:
@@ -105,8 +116,8 @@ async def createlist(channel, vote_msg_list, members):
         #if no one voted for this person, put them in the F tier
         highest_reaction = highest_reaction if highest_reaction != "" else "🇫"
         
-        davidsid = 382271649724104705
-        highest_reaction = "🆘" if members[val].id == davidsid else highest_reaction # fuck you david
+        # davidsid = 382271649724104705
+        # highest_reaction = "🆘" if members[val].id == davidsid else highest_reaction # fuck you david
         
         #find the avatar of the person
         # print(members[val].avatar)
@@ -203,39 +214,50 @@ async def download(interaction: Interaction[Client], videourl: str, uservoice: V
         ydl.download(videourl)
         
     
-async def play(interaction: Interaction[Client], videourl: str, uservoice: VoiceState, vc: VoiceClient = None):
+async def play(interaction: Interaction[Client], queinfo, uservoice: VoiceState, vc: VoiceClient = None):
+    # videourl = queinfo['videourl']
+    # userid = queinfo['userid']
+    # thumbnailURL = queinfo['thumbnail_url']
+    # trackname = queinfo['trackname']
+    # duration = queinfo['duration']
+    
     voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild)
     if voice is None:
         vc = await uservoice.channel.connect(reconnect = False)
-        
+    
+    userreq = interaction.client.get_user(queinfo['userid'])
+    
     while not os.path.exists(f'vids/{interaction.guild.id}.webm'):
         await asyncio.sleep(1)
     
-    thumbnailURL = "https://img.youtube.com/vi/"+str(re.search(r'(?<=watch\?v=)(.*?)(?=&|$)', videourl).group(0))+"/maxresdefault.jpg"
-    sr = Search(videourl).results
-    trackname = sr[0].title[:20] if len(sr) > 0 else "Unknown"
-    track_info = {
-        'Track': trackname, #slow as fuck but who cares lmao check if there is no results
-        'Requested By': interaction.user.mention,
-        'Duration': str(timedelta(seconds=int(float(ffmpeg.probe("vids/"+str(interaction.guild.id)+".webm")["format"]["duration"]))))
-    }
+    #could put this in db
+    # thumbnailURL = "https://img.youtube.com/vi/"+str(re.search(r'(?<=watch\?v=)(.*?)(?=&|$)', videourl).group(0))+"/maxresdefault.jpg"
+    # sr = Search(videourl).results
+    
+    #could put this in db
+    # trackname = sr[0].title[:255] if len(sr) > 0 else "Unknown"
+    # track_info = {
+    #     'Track': trackname, #slow as fuck but who cares lmao check if there is no results
+    #     'Video_Url': videourl,
+    #     'Requested_By': userreq.mention if userreq is not None else "Someone",
+    #     'Duration': str(timedelta(seconds=int(float(ffmpeg.probe("vids/"+str(interaction.guild.id)+".webm")["format"]["duration"]))))
+    # }
     
     #   this doesnt work :(
-    track_column_width = max(visual_length(track_info['Track']), len('Track'))
-    requested_by_column_width = max(visual_length(track_info['Requested By']), len('Requested By'))
-    duration_column_width = max(visual_length(track_info['Duration']), len('Duration'))
+    # track_column_width = max(visual_length(track_info['Track']), len('Track'))
+    # requested_by_column_width = max(visual_length(track_info['Requested By']), len('Requested By'))
+    # duration_column_width = max(visual_length(track_info['Duration']), len('Duration'))
 
-    embed=discord.Embed(title="🎶Now Playing", url=videourl, color=0xff0000)
+    embed=discord.Embed(title="🎶Now Playing", url=queinfo['videourl'], color=0xff0000)
     embed.set_author(name=f'{interaction.client.application.name} Music', url="https://github.com/TC6IDM/TierListBot", icon_url=interaction.client.application.icon.url)
-    embed.set_thumbnail(url=thumbnailURL) #technicall does this twice but im too lazy to do it any other way
-    embed.add_field(name=f"{'Track':{track_column_width}}   {'Requested By':<{requested_by_column_width}}   {'Duration':{duration_column_width}}", value= f"{track_info['Track']:{track_column_width}}   {track_info['Requested By']:<{requested_by_column_width}}   {track_info['Duration']}",inline=True)
+    embed.set_thumbnail(url=queinfo['thumbnail_url']) #technicall does this twice but im too lazy to do it any other way
+    embed.add_field(name="Track",value= queinfo['trackname'][:255],inline=True)
+    embed.add_field(name="Requested By",value=userreq.mention,inline=True)
+    embed.add_field(name="Duration",value=queinfo['duration'],inline=True)
+    # embed.add_field(name=f"{'Track':{track_column_width}}   {'Requested By':<{requested_by_column_width}}   {'Duration':{duration_column_width}}", value= f"{track_info['Track']:{track_column_width}}   {track_info['Requested By']:<{requested_by_column_width}}   {track_info['Duration']}",inline=True)
     embed.set_footer(text=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     
     view = SimpleView(vc)
-    # view.add_item(discord.ui.Button(label="Pause", style=discord.ButtonStyle.grey, custom_id="pause"))
-    # view.add_item(discord.ui.Button(label="Play", style=discord.ButtonStyle.green, custom_id="play"))
-    # view.add_item(discord.ui.Button(label="Skip", style=discord.ButtonStyle.grey, custom_id="skip"))
-    # view.add_item(discord.ui.Button(label="Stop", style=discord.ButtonStyle.red, custom_id="stop"))
     
     #edit instead?????
     musicembed = await interaction.channel.send(embed=embed, view=view)
@@ -273,8 +295,8 @@ async def downloadAndPlay(interaction: Interaction[Client], videourl: str, userv
     vc = None
     while (len(res[0]['queue']) >=1):
         # print(videourl)
-        videourl = res[0]['queue'][0]
-        vc,musicembed = await play(interaction,videourl,uservoice,vc)
+        queinfo = res[0]['queue'][0]
+        vc,musicembed = await play(interaction,queinfo,uservoice,vc)
         vc.stop()
         await musicembed.delete()
         os.remove(f'vids/{interaction.guild.id}.webm')
@@ -308,12 +330,15 @@ async def downloadAndPlay(interaction: Interaction[Client], videourl: str, userv
     if (os.path.exists(f'vids/{interaction.guild.id}_queue')): shutil.rmtree(f'vids/{interaction.guild.id}_queue')
     
         
-def addtoQueue(interaction: Interaction[Client], videourl: str):
+def addtoQueue(interaction: Interaction[Client], videoObj: YouTube):
     queue = TinyDB('queue.json')
     User = Query()
     res = queue.search(User.server == interaction.guild.id)
     if len(res) == 0:
-        queue.insert({'server': interaction.guild.id, 'queue': [videourl]})
+        queue.insert({'server': interaction.guild.id, 'queue': [{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength}]})
         return
     # print(res[0]['queue'])
-    queue.update({'queue': res[0]['queue']+[videourl]}, where('server') == interaction.guild.id)
+    queue.update({'queue': res[0]['queue']+[{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength}]}, where('server') == interaction.guild.id)
+    
+    
+
