@@ -17,7 +17,8 @@ import yt_dlp
 import os
 import ffmpeg
 from pytube import YouTube
-from pytube import Search
+# from pytube import YouTube
+# from pytube import Search
 import asyncio
 from tinydb import TinyDB, Query, where
 import os
@@ -183,30 +184,7 @@ class MyLogger:
         
 COOKIE_FILE = 'www.youtube.com_cookies.txt'
 
-async def download(interaction: Interaction[Client], videourl: str, uservoice: VoiceState):
-    # await interaction.channel.send(f"Playing {videourl}")
-    voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild)
-    
-    
-    output = '/vids/'+str(interaction.guild.id)+'.%(ext)s'
-    dir_path = 'C:/Users/Owner/Desktop/TierListBot/TierListBot/vids/'+str(interaction.guild.id)+"_queue/"
-    isExist = os.path.exists(dir_path)
-    if not isExist:
-    # Create a new directory because it does not exist
-        os.makedirs(dir_path)
-    
-    # paths = sorted(Path(dir_path).iterdir(), key=os.path.getmtime)
-    
-    if voice is not None:
-        files = os.listdir(dir_path)
-        os.chdir(dir_path)
-        files.sort(key=os.path.getctime)
-        # if len(files) >=1: print(files[-1])
-        queNumber = int(re.search(r'^(.*?)(?=\.)', files[-1]).group(0))+1 if len(files) >=1 else 0
-        output = '/vids/'+str(interaction.guild.id)+'_queue/'+str(queNumber)+'.%(ext)s'
-        os.chdir('C:/Users/Owner/Desktop/TierListBot/TierListBot')
-        pass
-    
+async def download(output: str, videourl: str):    
     
     ydl_opts = {
         'format': 'webm/bestaudio/best',
@@ -296,13 +274,13 @@ async def play(interaction: Interaction[Client], queinfo, uservoice: VoiceState,
     
     return vc,musicembed
     
-async def downloadAndPlay(interaction: Interaction[Client], videourl: str, uservoice: VoiceState):
+async def downloadAndPlay(interaction: Interaction[Client], output: str, videourl: str, uservoice: VoiceState):
     # create StreamPlayer
     if uservoice.channel is None:
         await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=5)
         return
     # voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild)
-    await download(interaction,videourl,uservoice)
+    await download(output,videourl)
     # print(voice)
     # if voice is not None: return
     
@@ -349,14 +327,33 @@ async def downloadAndPlay(interaction: Interaction[Client], videourl: str, userv
     
         
 def addtoQueue(interaction: Interaction[Client], videoObj: YouTube):
+    # await interaction.channel.send(f"Playing {videourl}")
+    voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild)
+    
+    output = '/vids/'+str(interaction.guild.id)+'.%(ext)s'
+    dir_path = 'C:/Users/Owner/Desktop/TierListBot/TierListBot/vids/'+str(interaction.guild.id)+"_queue/"
+    isExist = os.path.exists(dir_path)
+    
+    if not isExist:
+    # Create a new directory because it does not exist
+        os.makedirs(dir_path)
+        
+    if voice is not None:
+        files = os.listdir(dir_path)
+        os.chdir(dir_path)
+        files.sort(key=os.path.getctime)
+        queNumber = int(re.search(r'^(.*?)(?=\.)', files[-1]).group(0))+1 if len(files) >=1 else 0
+        output = '/vids/'+str(interaction.guild.id)+'_queue/'+str(queNumber)+'.%(ext)s'
+        os.chdir('C:/Users/Owner/Desktop/TierListBot/TierListBot')
+        
     queue = TinyDB('queue.json')
     User = Query()
     res = queue.search(User.server == interaction.guild.id)
     if len(res) == 0:
-        queue.insert({'server': interaction.guild.id, 'queue': [{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength}]})
-        return
-    # print(res[0]['queue'])
-    queue.update({'queue': res[0]['queue']+[{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength}]}, where('server') == interaction.guild.id)
+        queue.insert({'server': interaction.guild.id, 'queue': [{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'output':output}]})
+    else:# print(res[0]['queue'])
+        queue.update({'queue': res[0]['queue']+[{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'output':output}]}, where('server') == interaction.guild.id)
     
+    return output
     
 

@@ -12,6 +12,7 @@ import requests
 from tinydb import TinyDB, Query, where
 from discord.ui import Select, View
 import datetime
+# from pytube import Search
 from pytube import Search
 from util import *
 import re
@@ -181,13 +182,13 @@ async def play(interaction: discord.Interaction, query: str):
             if videoObj.length_seconds > MAXVIDEOLENGTH:
                 await interaction.response.send_message(f"Video is too long, go fuck yourself.", ephemeral = True, delete_after=7)
                 return
-            addtoQueue(interaction,videoObj)
+            output = addtoQueue(interaction,videoObj)
             if voice is None:
                 await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
-                await downloadAndPlay(interaction,query,uservoice)
+                await downloadAndPlay(interaction,output,query,uservoice)
             else:
                 await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
-                await download(interaction,query,uservoice)
+                await download(output,query)
         else:
             await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
         return
@@ -223,14 +224,14 @@ async def play(interaction: discord.Interaction, query: str):
         await newint.delete()
         
         videourl = videoObj.watch_url
-        addtoQueue(interaction,videoObj)
+        output=addtoQueue(interaction,videoObj)
         #runqueue instead
         if voice is None:
             # await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
-            await downloadAndPlay(interaction,videourl,uservoice)
+            await downloadAndPlay(interaction,output,videourl,uservoice)
         else:
             # await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
-            await download(interaction,videourl,uservoice)
+            await download(output,videourl)
     
     select.callback = my_mycallback
     view = View()

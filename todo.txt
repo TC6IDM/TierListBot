@@ -1,5 +1,6 @@
 MUSIC BOT:
 
+chdir makes things ugly
 
 view queue
 
@@ -9,6 +10,7 @@ shuffle
 
 volume controls
 
+More info when there is a loop?
 
 TIERLIST:
 
@@ -16,3 +18,5 @@ TIERLIST:
 OVERALL:
 
 document commands better
+
+print logs better
