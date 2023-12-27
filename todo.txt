@@ -2,15 +2,9 @@ MUSIC BOT:
 
 chdir makes things ugly
 
-view queue
-
-playlist support
-
 shuffle
 
 volume controls
-
-More info when there is a loop?
 
 TIERLIST:
 

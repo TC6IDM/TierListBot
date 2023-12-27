@@ -12,9 +12,12 @@ import requests
 from tinydb import TinyDB, Query, where
 from discord.ui import Select, View
 import datetime
+from createQueueEmbed import createQueueEmbed
 # from pytube import Search
 from pytube import Search
+from pytube.contrib.playlist import Playlist
 from util import *
+from buttonviews import deleteView, queueView
 import re
 from discord.ext.commands import cooldown, BucketType
 import pafy
@@ -56,29 +59,30 @@ async def on_app_command_error(interacton:discord.Interaction, error:app_command
         
 @bot.tree.command(name = "ping", description='Returns latency')
 async def ping(interaction: discord.Interaction):
-    print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
+    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     await interaction.response.send_message(f"Pong! {round(bot.latency * 1000)}ms", ephemeral = True)
 
 @bot.tree.command(name = "hello", description='Says hello')
 async def hello(interaction: discord.Interaction):
-    print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
+    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     await interaction.response.send_message(f"Hey {interaction.user.mention}!", ephemeral = True)
 
 @bot.tree.command(name = "say", description='Repeats what you say')
 @app_commands.describe(thing_to_say = "what should i say")
 @app_commands.describe(secret = "is this a secret?")
 async def say(interaction: discord.Interaction, thing_to_say: str, secret: bool = True):
-    print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
+    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     if not secret:
         await interaction.response.send_message(f"{interaction.user.mention} said: {thing_to_say}", ephemeral = True, delete_after=5)
     else:
+        await interaction.response.send_message(f"ok", ephemeral = True, delete_after=0)
         await interaction.channel.send(f"{thing_to_say}")
     
 @bot.tree.command(name = "tierlist", description='Starts voting for the Teir List')
 @app_commands.describe(timer = "is this timed? (true: timer, false: command to end)")
 @app_commands.describe(voting_time_seconds = "How long are we waiting for votes to come in? (seconds)")
 async def tierlist(interaction: discord.Interaction, timer: bool = False, voting_time_seconds: int = 5):
-    print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
+    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     if not (interaction.user.guild_permissions.administrator or interaction.user.id == myID):
         await interaction.response.send_message(f"You don't have permission to do that {interaction.user.mention}", ephemeral = True, delete_after=5)
         return
@@ -123,7 +127,7 @@ async def tierlist(interaction: discord.Interaction, timer: bool = False, voting
         
 @bot.tree.command(name = "endtierlist", description='ends voting for the Teir List')
 async def endtierlist(interaction: discord.Interaction):
-    print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
+    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     if not (interaction.user.guild_permissions.administrator or interaction.user.id == myID):
         await interaction.response.send_message(f"You don't have permission to do that {interaction.message.author.mention}", ephemeral = True, delete_after=5)
         return
@@ -148,7 +152,7 @@ async def endtierlist(interaction: discord.Interaction):
 @app_commands.describe(query = "looks up the song")
 @app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
 async def play(interaction: discord.Interaction, query: str):
-    print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
+    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     
     voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild) # This allows for more functionality with voice channels
     queue = TinyDB('queue.json')
@@ -175,7 +179,6 @@ async def play(interaction: discord.Interaction, query: str):
         if video_id and requests.get(video_url).status_code == 200:
             query = f'https://www.youtube.com/watch?v={str(video_id.group(0))}'
             videoObj = Search(query).results[0]
-            
             if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None:
                 await interaction.response.send_message(f'You can not play live videos on the bot, Try Again', ephemeral=True, delete_after=7)
                 return
@@ -190,7 +193,38 @@ async def play(interaction: discord.Interaction, query: str):
                 await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
                 await download(output,query)
         else:
-            await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
+            if '&list=' not in query and '?list='not in query: 
+                await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
+                return
+            # print(query)
+            # print(requests.get(query))
+            # print(requests.get(query).status_code)
+            if requests.get(query).status_code == 200:
+                await interaction.response.send_message(f'analysing playlist', ephemeral = True, delete_after=5)
+                waitingmessage = await interaction.channel.send(f'analysing playlist from {interaction.user.mention} - {query} (?/?)')
+                
+                playlist = Playlist(query)
+                print(playlist)
+                for v,i in enumerate(playlist):
+                    await waitingmessage.edit(content=f'analysing playlist from {interaction.user.mention} - {query} ({v+1}/{len(playlist)})')
+                    video_id = re.search(r'(?<=watch\?v=)(.*?)(?=&|$)', i)
+                    checker_url = "https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v="
+                    video_url = checker_url + (str(video_id.group(0)) if video_id is not None else "0")
+                    if video_url == "0" or requests.get(video_url).status_code != 200: continue
+                    newurl = f'https://www.youtube.com/watch?v={str(video_id.group(0))}'
+                    print(newurl)
+                    searchres = Search(newurl).results
+                    if len(searchres) == 0: continue
+                    videoObj = searchres[0]
+                    if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None: continue
+                    if videoObj.length_seconds > MAXVIDEOLENGTH: continue
+                    output = addtoQueue(interaction,videoObj)
+                    await download(output,newurl)
+                await waitingmessage.delete()
+                await startplay(interaction,uservoice)
+                return
+            await interaction.response.send_message(f"invalid youtube playlist link", ephemeral = True, delete_after=5)
+            
         return
     
     s = Search(query)
@@ -200,7 +234,7 @@ async def play(interaction: discord.Interaction, query: str):
     
     await interaction.response.send_message(f"Searching!", ephemeral = True, delete_after=3)
     # - {v.length} - {v.viewCountText}
-    selectionmessage = [f" {k+1} : {v.title}\n" if k!=9 else f"{k+1} : {v.title}\n" for k,v in enumerate(s.results[0:10])]
+    selectionmessage = [(" "if k!=9 else "") + f"{k+1} : {v.title}\n" for k,v in enumerate(s.results[0:10])]
     # print(s.results[0].views)
     # print(s.results[0].length)
     # debug(youtubeobj,"youtubeobj.json")
@@ -243,7 +277,7 @@ async def play(interaction: discord.Interaction, query: str):
 
 # @bot.tree.command(name = "stop", description='stops music?')
 # async def stop(interaction: discord.Interaction):
-#     print(f'Command: {interaction.command.name} was invoked by {interaction.user.nick if interaction.user.nick is not None else interaction.user.global_name} in {interaction.guild.name} - {interaction.channel.name}')
+#     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
 #     voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild) # This allows for more functionality with voice channels
 #     if voice is None:
 #         await interaction.response.send_message(f"not playing anything in this server", ephemeral = True, delete_after=5)
@@ -255,5 +289,38 @@ async def play(interaction: discord.Interaction, query: str):
 #         #     os.remove(f"vids/{interaction.guild.id}.webm")
 #         # except:
 #         #     pass
+
+@bot.tree.command(name = "queue", description='views the queue')
+@app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
+async def queue(interaction: discord.Interaction):
+    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
+    
+    queue = TinyDB('queue.json')
+    User = Query()
+    res = queue.search(User.server == interaction.guild.id)
+    if len(res) == 0:
+        queue.insert({'server': interaction.guild.id, 'queue': []})
+        User = Query()
+        res = queue.search(User.server == interaction.guild.id)
+
+    if len(res[0]['queue']) == 0:
+        await interaction.response.send_message(f"no queue", ephemeral = True, delete_after=3)
+        return
+    
+    await interaction.response.send_message(f"Searching queue:", ephemeral = True, delete_after=3)
+    
+    total_items = len(res[0]["queue"])
+    items_per_page = 10
+    total_pages = (total_items + items_per_page - 1) // items_per_page
         
+    qembed = createQueueEmbed(interaction,res,1,total_pages)
+    queue_view = queueView(qembed,res,total_pages)
+    #edit instead?????
+    queueembed = await interaction.channel.send(embed=qembed,view=queue_view)
+    queue_view.queueembed = queueembed
+    # queuemessage = [(" "if k!=9 else "") + f"{k+1} : {interaction.client.get_user(v['userid']).display_name} - {v['trackname']} - {v['videourl']} - {v['duration']}\n" for k,v in enumerate(res[0]['queue'][0:10])]
+    # await interaction.channel.send(f'```'+''.join(map(str, queuemessage))+'```')
+
+
+
 bot.run(TOKEN)
