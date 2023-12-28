@@ -161,20 +161,30 @@ async def endtierlist(interaction: discord.Interaction):
 
 @bot.tree.command(name = "play", description='Plays music, if the bot is in a vc it will add the song to the queue (links work too)')
 @app_commands.describe(query = "song to look up")
+@app_commands.describe(im_feeling_lucky = "pick the first option in the selection")
 @app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
-async def play(interaction: discord.Interaction, query: str):
+async def play(interaction: discord.Interaction, query: str, im_feeling_lucky: bool = False):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}\nquery: {query}')
-    
+        
     voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild) # This allows for more functionality with voice channels
     
     #gets the queue from the database
     res,queue = getQueueFromDB(interaction.guild.id)
         
-    #removes old queue if the bot is not in a vc
+    #removes old queue if the bot is not in a vc 
     if (os.path.exists(f'vids/{interaction.guild.id}.webm') or os.path.exists(f'vids/{interaction.guild.id}_queue') or len(res[0]['queue']) >=1) and voice is None:
-        if (os.path.exists(f'vi-ds/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
+        if (os.path.exists(f'vids/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
         if (os.path.exists(f'vids/{interaction.guild.id}_queue')): shutil.rmtree(f'vids/{interaction.guild.id}_queue')
         queue.update({'queue': []}, where('server') == interaction.guild.id)
+        disable_enableQueue(interaction.guild.id, False)
+    
+    #checks if the bot is busy downloading a song
+    queue = TinyDB('queue.json')
+    User = Query()
+    res = queue.search(User.server == interaction.guild.id)
+    if res[0]['disabled']:
+        await interaction.response.send_message(f"A song is already downloading, songs can not be added to the queue at this time", ephemeral = True, delete_after=5)
+        return
     
     #checks if the user is in a vc
     uservoice = interaction.user.voice
@@ -199,6 +209,11 @@ async def play(interaction: discord.Interaction, query: str):
     
     await interaction.response.send_message(f"Searching!", ephemeral = True, delete_after=3)
 
+    if im_feeling_lucky:
+        videoObj = s.results[0]
+        await playVideoObj(videoObj,interaction,uservoice,voice)
+        return
+    
     #build the selection and embed
     selectionmessage = [(" "if k!=9 else "") + f"{k+1} : {v.title}\n" for k,v in enumerate(s.results[0:10])]
     select = Select(options = [discord.SelectOption(label = f'{k+1} : {v.title}'[:99] if len(f'{k+1}: {v.title}') > 99 else f'{k+1} : {v.title}', description = f'{v.length} - {v.viewCountText}', value=k) for k,v in enumerate(s.results[0:10])])

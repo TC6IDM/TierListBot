@@ -34,13 +34,16 @@ MAXVIDEOLENGTH = 3600
 
 async def download(filepath: str, videourl: str) -> None:    
     '''
-    downloads a given song to the given file path
+    downloads a given song to the given file path, waits for download to finish for other songs to be queued
     
+    :param interaction: 
+        discord interaction object
     :param filepath: 
         the file path where the song will be saved
     :param videourl: 
         the url of the video to be downloaded
     '''
+    
     
     ydl_opts = {
         'format': 'webm/bestaudio/best',
@@ -61,6 +64,7 @@ async def download(filepath: str, videourl: str) -> None:
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download(videourl)
+    
         
 async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceState, vc: VoiceClient = None) -> tuple[VoiceClient, discord.Message]:
     '''
@@ -130,6 +134,7 @@ async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceS
             #reset the queue
             queue = TinyDB('queue.json')
             queue.update({'queue': []}, where('server') == interaction.guild.id)
+            disable_enableQueue(interaction.guild.id, False)
             break
     
     return vc,musicembed
@@ -154,7 +159,7 @@ async def downloadAndPlay(interaction: Interaction[Client], filepath: str, video
         return
 
     #downloads and plays
-    await download(filepath,videourl)
+    await download(interaction,filepath,videourl)
     await startqueue(interaction,uservoice)
     return
     
@@ -184,6 +189,7 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
         
         # plays the song next in the queue
         queinfo = res[0]['queue'][0]
+        print(f'Now playing: {queinfo["trackname"]} in {interaction.guild.name} - {interaction.channel.name}')
         vc,musicembed = await playtrack(interaction,queinfo,uservoice,vc)
         
         #cleans up
@@ -232,6 +238,7 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
     if (os.path.exists(f'vids/{interaction.guild.id}_queue')): shutil.rmtree(f'vids/{interaction.guild.id}_queue')
     queue = TinyDB('queue.json')
     queue.update({'queue': []}, where('server') == interaction.guild.id)
+    disable_enableQueue(interaction.guild.id, False)
     return
            
 def addtoQueue(interaction: Interaction[Client], videoObj: YouTube) -> str:
@@ -277,7 +284,10 @@ def addtoQueue(interaction: Interaction[Client], videoObj: YouTube) -> str:
     res = queue.search(User.server == interaction.guild.id)
     
     if len(res) == 0:
-        queue.insert({'server': interaction.guild.id, 'queue': [{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'output':output}]})
+        queue.insert({'server': interaction.guild.id, 'queue': 
+            [{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'output':output}],
+            # 'loop': False, 'shuffle': False, 
+            'disabled': False})
     else:
         queue.update({'queue': res[0]['queue']+[{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'output':output}]}, where('server') == interaction.guild.id)
     
@@ -304,7 +314,14 @@ async def queryLink(query:str, interaction: Interaction[Client], uservoice: Voic
     video_url = checker_url + (str(video_id.group(0)) if video_id is not None else "0")
     if video_id and requests.get(video_url).status_code == 200: 
         query = f'https://www.youtube.com/watch?v={str(video_id.group(0))}'
-        videoObj = YouTube(query)
+        videoObj = Search(query).results
+        if len(videoObj) == 0: 
+            await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
+            return
+        videoObj = videoObj[0]
+        # videoObj = YouTube(query) #(TODO) FIX THIS
+        # print(len(videoObj))
+        await interaction.response.send_message(f'playing', ephemeral = True, delete_after=5)
         await playVideoObj(videoObj, interaction, uservoice, voice)
         return
     
@@ -313,35 +330,60 @@ async def queryLink(query:str, interaction: Interaction[Client], uservoice: Voic
         await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
         return
 
+    #gets the playlist object and checks if it is a real playlist
+    playlist = Playlist(query)
+    if len(playlist) == 0:
+        await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
+        return
+    
     # Playlist is real, send out default message and stop people from adding more songs to the queue (TODO)
     await interaction.response.send_message(f'analysing playlist', ephemeral = True, delete_after=5)
     waitingmessage = await interaction.channel.send(f'analysing playlist from {interaction.user.mention} - {query} (?/?)')
     
-    #create playlist object and enumerate through it
-    playlist = Playlist(query)
+    
+    #disables people adding to the queue while the playlist is being downloaded
+    disable_enableQueue(interaction.guild.id, True)
+    
+    endtext = ""
+    #enumerates through the playlist object
     for v,i in enumerate(playlist):
+        
         #edits the message to show where in the playlist we are at
-        await waitingmessage.edit(content=f'analysing playlist from {interaction.user.mention} - {query} ({v+1}/{len(playlist)})')
+        await waitingmessage.edit(content=f'analysing playlist from {interaction.user.mention} - {query} ({v+1}/{len(playlist)})\n{endtext}')
         
         #makes sure that the video is a working video
         video_id = re.search(r'(?<=watch\?v=)(.*?)(?=&|$)', i)
         checker_url = "https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v="
         video_url = checker_url + (str(video_id.group(0)) if video_id is not None else "0")
-        if video_url == "0" or requests.get(video_url).status_code != 200: continue
+        if video_url == "0" or requests.get(video_url).status_code != 200: 
+            endtext += f'song {v+1} - {i} was not added to the queue (invalid url)\n'
+            continue
         
         #checks if the video is not a live video, and not too long
         newurl = f'https://www.youtube.com/watch?v={str(video_id.group(0))}'
-        videoObj = YouTube(newurl)
-        if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None: continue
-        if videoObj.length_seconds > MAXVIDEOLENGTH: continue
+        videoObj = Search(newurl).results
+        if len(videoObj) == 0: 
+            endtext += f'song {v+1} - {i} was not added to the queue (url broken)\n'
+            continue
+        videoObj = videoObj[0]
+        # videoObj = YouTube(newurl) #(TODO) FIX THIS
+        if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None: 
+            endtext += f'song {v+1} - {videoObj.title} was not added to the queue (possibly live video)\n'
+            continue
+        if videoObj.length_seconds > MAXVIDEOLENGTH: 
+            endtext += f'song {v+1} - {videoObj.title} was not added to the queue (video too long)\n'
+            continue
         
         #adds the video to the queue and downloads it
         output = addtoQueue(interaction,videoObj)
-        await download(output,newurl)
+        await download(interaction,output,newurl)
+    
+    #downloading is done so the user can add back to the queue now
+    disable_enableQueue(interaction.guild.id, False)
     
     #delete the message and start the queue when its done downloading
     await waitingmessage.delete()
-    await startqueue(interaction,uservoice)
+    if voice is None: await startqueue(interaction,uservoice)
     return
 
 async def playVideoObj(videoObj: YouTube, interaction: Interaction[Client], uservoice: VoiceState, voice: VoiceProtocol, newint: Message = None) -> None:
@@ -378,13 +420,13 @@ async def playVideoObj(videoObj: YouTube, interaction: Interaction[Client], user
     
     #bot is not in call so join the call and play
     if voice is None:
-        # await in-teraction.response.send_message(f"playing", ephemeral = True, delete_after=3)
+        # await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
         await downloadAndPlay(interaction,output,videoObj.watch_url,uservoice)
     
     #bot is in call so just download the song
     else:
         # await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
-        await download(output,videoObj.watch_url)
+        await download(interaction,output,videoObj.watch_url)
     
     return
     
@@ -406,7 +448,32 @@ def getQueueFromDB(guildID: int) -> tuple[List,TinyDB]:
     
     #if there is no queue insert a blank queue
     if len(res) == 0:
-        queue.insert({'server': guildID, 'queue': []})
+        queue.insert({'server': guildID, 'queue': [], 'disabled': False})
         User = Query()
         res = queue.search(User.server == guildID)
     return res,queue
+
+def disable_enableQueue(guildID: int, disable: bool = True) -> None:
+    '''
+    disables or enables the queue for the given guild
+    
+    :param guildID:
+        the id of the guild the user is in
+    :param disable:
+        wheither to disable or enable the queue, Disables by default
+            
+    '''
+    
+    #gets the queue
+    queue = TinyDB('queue.json')
+    User = Query()
+    res = queue.search(User.server == guildID)
+    
+    #if server is not in the databse, add it
+    if len(res) == 0:
+        queue.insert({'server': guildID, 'queue': [], 'disabled': disable})
+        return
+    
+    #disables or enables the queue
+    queue.update({'disabled': disable}, where('server') == guildID)
+    return

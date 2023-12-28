@@ -6,11 +6,16 @@ shuffle
 
 volume controls
 
+fix YouTube object - not showing views properly
+
+spotify support
+
+auto delete queue message before it times out
+auto delete search message before it times out
+
+stop user from queuing song when one is downloading (other than playlist)
+
 TIERLIST:
 
 
 OVERALL:
-
-document commands better
-
-print logs better

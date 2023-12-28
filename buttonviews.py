@@ -54,7 +54,7 @@ class queueView(deleteView):
         '''
         The previous button, goes to the previous page in the queue
         '''
-        
+        print(f'Previous button pressed by {interaction.user.name} in {interaction.guild.name} - {interaction.channel.name}')
         #if the page number is in range, go to the previous page
         if 1 <= self.listnumber-1 <= self.total_pages:
             self.listnumber-=1
@@ -70,7 +70,7 @@ class queueView(deleteView):
         '''
         The next button, goes to the next page in the queue
         '''
-        
+        print(f'Next button pressed by {interaction.user.name} in {interaction.guild.name} - {interaction.channel.name}')
         #if the page number is in range, go to the previous page
         if 1 <= self.listnumber+1 <= self.total_pages:
             self.listnumber+=1
@@ -128,32 +128,33 @@ class SimpleView(discord.ui.View):
         '''
         The Pause button, pauses the currently playing song
         '''
+        print(f'Pause button pressed by {interaction.user.name} in {interaction.guild.name} - {interaction.channel.name}')
         await interaction.response.send_message('Pausing', ephemeral=True, delete_after=3)
         
         #if not paused, pause
         if self.vc.is_playing(): 
             self.vc.pause()
             await self.updatetitle()
-            print("PAUSED!")
     
     @discord.ui.button(label='Play', style=discord.ButtonStyle.green, custom_id="Play")
     async def Play(self, interaction: discord.Interaction, button: discord.ui.Button):
         '''
         The Play button, plays the currently playing song
         '''
+        print(f'Play button pressed by {interaction.user.name} in {interaction.guild.name} - {interaction.channel.name}')
         await interaction.response.send_message('Playing', ephemeral=True, delete_after=3)
         
         #if not playing, play
         if self.vc.is_paused(): 
             self.vc.resume()
             await self.updatetitle()
-            print("RESUMED!")
         
     @discord.ui.button(label='Skip', style=discord.ButtonStyle.blurple, custom_id="Skip")
     async def Skip(self, interaction: discord.Interaction, button: discord.ui.Button):
         '''
         The Skip button, skips the current song in the queue
         '''
+        print(f'Skip button pressed by {interaction.user.name} in {interaction.guild.name} - {interaction.channel.name}')
         await interaction.response.send_message('Skipping', ephemeral=True, delete_after=3)
         
         #skips song via MAGIC!!!!! (idk how it works but it just does)
@@ -164,6 +165,7 @@ class SimpleView(discord.ui.View):
         '''
         The Stop button, Stops the bot's music and clears the queue
         '''
+        print(f'Stop button pressed by {interaction.user.name} in {interaction.guild.name} - {interaction.channel.name}')
         await interaction.response.send_message('Stopping', ephemeral=True, delete_after=3)
         
         #clears the queue and stops the bot
@@ -176,7 +178,7 @@ class SimpleView(discord.ui.View):
         '''
         The Loop button, Loops the current song
         '''
-    
+        print(f'Loop button pressed by {interaction.user.name} in {interaction.guild.name} - {interaction.channel.name}')
         if not self.LOOP:
             #if not looping, loop
             self.LOOP = True
