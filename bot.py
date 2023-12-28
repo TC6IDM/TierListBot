@@ -16,7 +16,8 @@ from createQueueEmbed import createQueueEmbed
 # from pytube import Search
 from pytube import Search
 from pytube.contrib.playlist import Playlist
-from util import *
+from tierlistUtil import createlist
+from songUtil import *
 from buttonviews import deleteView, queueView
 import re
 from discord.ext.commands import cooldown, BucketType
@@ -71,7 +72,7 @@ async def hello(interaction: discord.Interaction):
 @app_commands.describe(thing_to_say = "what should i say")
 @app_commands.describe(secret = "is this a secret?")
 async def say(interaction: discord.Interaction, thing_to_say: str, secret: bool = True):
-    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
+    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}\nthing_to_say: {thing_to_say} - secret: {secret}')
     if not secret:
         await interaction.response.send_message(f"{interaction.user.mention} said: {thing_to_say}", ephemeral = True, delete_after=5)
     else:
@@ -79,28 +80,33 @@ async def say(interaction: discord.Interaction, thing_to_say: str, secret: bool 
         await interaction.channel.send(f"{thing_to_say}")
     
 @bot.tree.command(name = "tierlist", description='Starts voting for the Teir List')
-@app_commands.describe(timer = "is this timed? (true: timer, false: command to end)")
+@app_commands.describe(timer = "is this timed? (true: timer, false: type command to end)")
 @app_commands.describe(voting_time_seconds = "How long are we waiting for votes to come in? (seconds)")
 async def tierlist(interaction: discord.Interaction, timer: bool = False, voting_time_seconds: int = 5):
-    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
+    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}\ntimer: {timer} - voting_time_seconds: {voting_time_seconds}')
     if not (interaction.user.guild_permissions.administrator or interaction.user.id == myID):
         await interaction.response.send_message(f"You don't have permission to do that {interaction.user.mention}", ephemeral = True, delete_after=5)
         return
-    db = TinyDB('db.json')
+    
+    db = TinyDB('tierlist.json')
     User = Query()
     res = db.search(User.channel == interaction.channel.id)
     if len(res) >= 1:
         await interaction.response.send_message(f"already one tierlist ongoing, try /endtierlist", ephemeral = True, delete_after=7)
         return
     
-    await interaction.response.send_message(f"kys!!!!", ephemeral = True, delete_after=3)
+    await interaction.response.send_message(f"starting tierlist", ephemeral = True, delete_after=5)
     
     if not timer: db.insert({'channel': interaction.channel.id, 'vote_msg_list': interaction.channel.id, 'memberids': interaction.channel.id})
-    
-    members = [x for x in interaction.channel.members if (not x.bot and x.id != 704872368572465163) or x.id == 1186185707258134560]
+    charliealtid = 704872368572465163
+    botid = 1186185707258134560
+    #gets all members that can view the channel, excludes bots and charlie's alt, includes my bot
+    members = [x for x in interaction.channel.members if (not x.bot and x.id != charliealtid) or x.id == botid]
     vote_msg_list = []
     await interaction.channel.send('@everyone starting tierlist')
+    
     for member in members:
+        #reaction message
         vote_msg = await interaction.channel.send(f'Where should {member.global_name if member.global_name is not None else member.name} be placed?')
         await vote_msg.add_reaction('🆘')
         vote_msg.id
@@ -110,14 +116,16 @@ async def tierlist(interaction: discord.Interaction, timer: bool = False, voting
         
         vote_msg_list.append(vote_msg.id)
     
-    if timer:        
+    if timer: #timed
         presentDate = datetime.datetime.now()
         unix_timestamp = datetime.datetime.timestamp(presentDate) + voting_time_seconds
         await interaction.channel.send(f'ending <t:{round(unix_timestamp)}:R>')
         #timer needed
         await asyncio.sleep(voting_time_seconds)
         await createlist(interaction.channel, vote_msg_list, members) 
-    else:
+        return
+        
+    else: #not timed
         memberids = [x.id for x in members]
         db.update_multiple([
             ({'vote_msg_list': vote_msg_list}, where('channel') == interaction.channel.id),
@@ -125,149 +133,91 @@ async def tierlist(interaction: discord.Interaction, timer: bool = False, voting
             ])
         return
         
-@bot.tree.command(name = "endtierlist", description='ends voting for the Teir List')
+@bot.tree.command(name = "endtierlist", description='Ends voting for the Teir List')
 async def endtierlist(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     if not (interaction.user.guild_permissions.administrator or interaction.user.id == myID):
         await interaction.response.send_message(f"You don't have permission to do that {interaction.message.author.mention}", ephemeral = True, delete_after=5)
         return
-    db = TinyDB('db.json')
+    
+    db = TinyDB('tierlist.json')
     User = Query()
     res = db.search(User.channel == interaction.channel.id)
     
+    # Check if there is no query in the database
     if len(res) == 0 or (res[0]['channel'] == res[0]['vote_msg_list'] and res[0]['channel'] == res[0]['memberids']):
         await interaction.response.send_message(f"no tierlist to end, try /tierlist", ephemeral = True, delete_after=7)
         return
     
-    await interaction.response.send_message(f"KYS!!!!", ephemeral = True, delete_after=3)
+    await interaction.response.send_message(f"ending tierlist", ephemeral = True, delete_after=5)
     
     res = res[0]
     vote_msg_list = res['vote_msg_list']
-    memberids = [await bot.fetch_user(x) for x in res['memberids']]
+    memberids = [await bot.fetch_user(x) for x in res['memberids']] #gets user objects from ids
     await createlist(interaction.channel, vote_msg_list, memberids)
+    
     # Remove the query from the database
     db.remove(User.channel == interaction.channel.id)
 
-@bot.tree.command(name = "play", description='plays music?')
-@app_commands.describe(query = "looks up the song")
+@bot.tree.command(name = "play", description='Plays music, if the bot is in a vc it will add the song to the queue (links work too)')
+@app_commands.describe(query = "song to look up")
 @app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
 async def play(interaction: discord.Interaction, query: str):
-    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
+    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}\nquery: {query}')
     
     voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild) # This allows for more functionality with voice channels
-    queue = TinyDB('queue.json')
-    User = Query()
-    res = queue.search(User.server == interaction.guild.id)
-    if len(res) == 0:
-        queue.insert({'server': interaction.guild.id, 'queue': []})
-        User = Query()
-        res = queue.search(User.server == interaction.guild.id)
+    
+    #gets the queue from the database
+    res,queue = getQueueFromDB(interaction.guild.id)
         
+    #removes old queue if the bot is not in a vc
     if (os.path.exists(f'vids/{interaction.guild.id}.webm') or os.path.exists(f'vids/{interaction.guild.id}_queue') or len(res[0]['queue']) >=1) and voice is None:
-        if (os.path.exists(f'vids/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
+        if (os.path.exists(f'vi-ds/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
         if (os.path.exists(f'vids/{interaction.guild.id}_queue')): shutil.rmtree(f'vids/{interaction.guild.id}_queue')
         queue.update({'queue': []}, where('server') == interaction.guild.id)
     
+    #checks if the user is in a vc
     uservoice = interaction.user.voice
     if uservoice is None:
         await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=5)
         return
+    
+    #runs the command for a youtube link
     if "https://www.youtube.com/" in query or "https://youtube.com/" in query:
-        video_id = re.search(r'(?<=watch\?v=)(.*?)(?=&|$)', query)
-        checker_url = "https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v="
-        video_url = checker_url + (str(video_id.group(0)) if video_id is not None else "0")
-        if video_id and requests.get(video_url).status_code == 200:
-            query = f'https://www.youtube.com/watch?v={str(video_id.group(0))}'
-            videoObj = Search(query).results[0]
-            if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None:
-                await interaction.response.send_message(f'You can not play live videos on the bot, Try Again', ephemeral=True, delete_after=7)
-                return
-            if videoObj.length_seconds > MAXVIDEOLENGTH:
-                await interaction.response.send_message(f"Video is too long, go fuck yourself.", ephemeral = True, delete_after=7)
-                return
-            output = addtoQueue(interaction,videoObj)
-            if voice is None:
-                await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
-                await downloadAndPlay(interaction,output,query,uservoice)
-            else:
-                await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
-                await download(output,query)
-        else:
-            if '&list=' not in query and '?list='not in query: 
-                await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
-                return
-            # print(query)
-            # print(requests.get(query))
-            # print(requests.get(query).status_code)
-            if requests.get(query).status_code == 200:
-                await interaction.response.send_message(f'analysing playlist', ephemeral = True, delete_after=5)
-                waitingmessage = await interaction.channel.send(f'analysing playlist from {interaction.user.mention} - {query} (?/?)')
-                
-                playlist = Playlist(query)
-                print(playlist)
-                for v,i in enumerate(playlist):
-                    await waitingmessage.edit(content=f'analysing playlist from {interaction.user.mention} - {query} ({v+1}/{len(playlist)})')
-                    video_id = re.search(r'(?<=watch\?v=)(.*?)(?=&|$)', i)
-                    checker_url = "https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v="
-                    video_url = checker_url + (str(video_id.group(0)) if video_id is not None else "0")
-                    if video_url == "0" or requests.get(video_url).status_code != 200: continue
-                    newurl = f'https://www.youtube.com/watch?v={str(video_id.group(0))}'
-                    print(newurl)
-                    searchres = Search(newurl).results
-                    if len(searchres) == 0: continue
-                    videoObj = searchres[0]
-                    if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None: continue
-                    if videoObj.length_seconds > MAXVIDEOLENGTH: continue
-                    output = addtoQueue(interaction,videoObj)
-                    await download(output,newurl)
-                await waitingmessage.delete()
-                await startplay(interaction,uservoice)
-                return
-            await interaction.response.send_message(f"invalid youtube playlist link", ephemeral = True, delete_after=5)
-            
+        await queryLink(query, interaction, uservoice, voice)
         return
     
+    #runs the command for a spotify link
+    if  "https://open.spotify.com/track/" in query or "https://open.spotify.com/playlist/" in query:
+        await interaction.response.send_message(f'Spotify links are being worked on', ephemeral = True, delete_after=5)
+        return
+    #regular search
     s = Search(query)
     if (len(s.results) == 0):
         await interaction.response.send_message(f"no results found", ephemeral = True, delete_after=5)
         return
     
     await interaction.response.send_message(f"Searching!", ephemeral = True, delete_after=3)
-    # - {v.length} - {v.viewCountText}
+
+    #build the selection and embed
     selectionmessage = [(" "if k!=9 else "") + f"{k+1} : {v.title}\n" for k,v in enumerate(s.results[0:10])]
-    # print(s.results[0].views)
-    # print(s.results[0].length)
-    # debug(youtubeobj,"youtubeobj.json")
-    # video = pafy.new(s.results[0].watch_url)
-    # video.viewcount
-    # video.duration
-    #work on this, gn
     select = Select(options = [discord.SelectOption(label = f'{k+1} : {v.title}'[:99] if len(f'{k+1}: {v.title}') > 99 else f'{k+1} : {v.title}', description = f'{v.length} - {v.viewCountText}', value=k) for k,v in enumerate(s.results[0:10])])
     
+    #callback for when an option is chosen
     async def my_mycallback(ints:Interaction[Client]):
+        #user did not search this
         if ints.user.id != interaction.user.id: 
             await ints.response.send_message(f"You cant select this video, you did not search it", ephemeral = True, delete_after=7)
             return
-        videoObj = s.results[int(select.values[0])]
-        if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None:
-            await ints.response.send_message(f'You can not play live videos on the bot, Try Again', ephemeral=True, delete_after=7)
-            return
-        if videoObj.length_seconds > MAXVIDEOLENGTH:
-            await ints.response.send_message(f"Video is too long, go fuck yourself.", ephemeral = True, delete_after=7)
-            return
-        await newint.delete()
         
-        videourl = videoObj.watch_url
-        output=addtoQueue(interaction,videoObj)
-        #runqueue instead
-        if voice is None:
-            # await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
-            await downloadAndPlay(interaction,output,videourl,uservoice)
-        else:
-            # await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
-            await download(output,videourl)
+        #live video
+        videoObj = s.results[int(select.values[0])]
+        await playVideoObj(videoObj,interaction,uservoice,voice,newint)
+        return
     
     select.callback = my_mycallback
+    
+    #sends the selection message
     view = View()
     view.add_item(select)
     # davidsid = 382271649724104705
@@ -275,52 +225,30 @@ async def play(interaction: discord.Interaction, query: str):
     searchstring = f'{interaction.user.mention} Searched: "*{query}*"\n' 
     newint = await interaction.channel.send(f'{searchstring}```'+''.join(map(str, selectionmessage))+'```',view=view)
 
-# @bot.tree.command(name = "stop", description='stops music?')
-# async def stop(interaction: discord.Interaction):
-#     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
-#     voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild) # This allows for more functionality with voice channels
-#     if voice is None:
-#         await interaction.response.send_message(f"not playing anything in this server", ephemeral = True, delete_after=5)
-#     else:
-#         await interaction.response.send_message(f"Stopping!", ephemeral = True, delete_after=3)
-#         voice.stop()
-#         # await voice.disconnect(force = True)
-#         # try:
-#         #     os.remove(f"vids/{interaction.guild.id}.webm")
-#         # except:
-#         #     pass
-
-@bot.tree.command(name = "queue", description='views the queue')
+@bot.tree.command(name = "queue", description='Views the queue')
 @app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
 async def queue(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     
-    queue = TinyDB('queue.json')
-    User = Query()
-    res = queue.search(User.server == interaction.guild.id)
-    if len(res) == 0:
-        queue.insert({'server': interaction.guild.id, 'queue': []})
-        User = Query()
-        res = queue.search(User.server == interaction.guild.id)
+    #gets the queue from the database
+    res,queue = getQueueFromDB(interaction.guild.id)
 
+    #queue is empty
     if len(res[0]['queue']) == 0:
         await interaction.response.send_message(f"no queue", ephemeral = True, delete_after=3)
         return
     
     await interaction.response.send_message(f"Searching queue:", ephemeral = True, delete_after=3)
     
+    #gets the total pages in the queue
     total_items = len(res[0]["queue"])
     items_per_page = 10
     total_pages = (total_items + items_per_page - 1) // items_per_page
-        
+    
+    #creates the embed and view
     qembed = createQueueEmbed(interaction,res,1,total_pages)
     queue_view = queueView(qembed,res,total_pages)
-    #edit instead?????
     queueembed = await interaction.channel.send(embed=qembed,view=queue_view)
     queue_view.queueembed = queueembed
-    # queuemessage = [(" "if k!=9 else "") + f"{k+1} : {interaction.client.get_user(v['userid']).display_name} - {v['trackname']} - {v['videourl']} - {v['duration']}\n" for k,v in enumerate(res[0]['queue'][0:10])]
-    # await interaction.channel.send(f'```'+''.join(map(str, queuemessage))+'```')
-
-
 
 bot.run(TOKEN)

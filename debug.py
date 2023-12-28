@@ -1,7 +1,15 @@
 import json
 import jsonpickle
 import os
-def debug(item,location = "debug.json"):
+def debug(item: object, location: str = "debug.json") -> None:
+    '''
+    debugs a given object
+    
+    :param item:
+        the object to debug
+    :param location: 
+        the file to write the debug to
+    '''
     json_object = jsonpickle.encode(item)
     if not os.path.exists(f'/debug/{location}'):
         os.makedirs(f'/debug/{location}')
