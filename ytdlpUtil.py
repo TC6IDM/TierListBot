@@ -1,6 +1,8 @@
 def my_hook(d):
     if d['status'] == 'finished':
         pass
+    else:
+        print(d['filename'], d['_percent_str'], d['_eta_str'])
 
 class MyLogger:
     def debug(self, msg):

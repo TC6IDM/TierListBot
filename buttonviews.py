@@ -58,7 +58,7 @@ class queueView(deleteView):
         #if the page number is in range, go to the previous page
         if 1 <= self.listnumber-1 <= self.total_pages:
             self.listnumber-=1
-            await interaction.response.send_message('previous', ephemeral=True, delete_after=3)
+            await interaction.response.send_message('previous', ephemeral=True, delete_after=0)
             await self.queueembed.edit(embed=createQueueEmbed(interaction,self.res,self.listnumber,self.total_pages))
             return
         
@@ -74,7 +74,7 @@ class queueView(deleteView):
         #if the page number is in range, go to the previous page
         if 1 <= self.listnumber+1 <= self.total_pages:
             self.listnumber+=1
-            await interaction.response.send_message('next', ephemeral=True, delete_after=3)
+            await interaction.response.send_message('next', ephemeral=True, delete_after=0)
             await self.queueembed.edit(embed=createQueueEmbed(interaction,self.res,self.listnumber,self.total_pages))
             return
         
@@ -129,7 +129,7 @@ class SimpleView(discord.ui.View):
         The Pause button, pauses the currently playing song
         '''
         print(f'Pause button pressed by {interaction.user.name} in {interaction.guild.name} - {interaction.channel.name}')
-        await interaction.response.send_message('Pausing', ephemeral=True, delete_after=3)
+        await interaction.response.send_message('Pausing', ephemeral=True, delete_after=1)
         
         #if not paused, pause
         if self.vc.is_playing(): 
@@ -142,7 +142,7 @@ class SimpleView(discord.ui.View):
         The Play button, plays the currently playing song
         '''
         print(f'Play button pressed by {interaction.user.name} in {interaction.guild.name} - {interaction.channel.name}')
-        await interaction.response.send_message('Playing', ephemeral=True, delete_after=3)
+        await interaction.response.send_message('Playing', ephemeral=True, delete_after=1)
         
         #if not playing, play
         if self.vc.is_paused(): 
@@ -168,7 +168,8 @@ class SimpleView(discord.ui.View):
         print(f'Stop button pressed by {interaction.user.name} in {interaction.guild.name} - {interaction.channel.name}')
         await interaction.response.send_message('Stopping', ephemeral=True, delete_after=3)
         
-        #clears the queue and stops the bot
+        #clears the queue and stops the bot (also stops looping)
+        self.LOOP = False
         queue = TinyDB('queue.json')
         queue.update({'queue': []}, where('server') == interaction.guild.id)
         self.vc.stop()

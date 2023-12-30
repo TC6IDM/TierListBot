@@ -17,6 +17,7 @@ from tinydb import Query, TinyDB
 import yt_dlp
 import os
 import ffmpeg
+from YoutubeSearchCustom import YoutubeSearchCustom
 from pytube import YouTube
 # from pytube import YouTube
 # from pytube import Search
@@ -32,12 +33,10 @@ from ytdlpUtil import MyLogger, my_hook
 COOKIE_FILE = 'www.youtube.com_cookies.txt'
 MAXVIDEOLENGTH = 3600
 
-async def download(filepath: str, videourl: str) -> None:    
+def download(filepath: str, videourl: str) -> None:    
     '''
     downloads a given song to the given file path, waits for download to finish for other songs to be queued
     
-    :param interaction: 
-        discord interaction object
     :param filepath: 
         the file path where the song will be saved
     :param videourl: 
@@ -62,6 +61,7 @@ async def download(filepath: str, videourl: str) -> None:
         'cookiefile': COOKIE_FILE, #cookies for downloading age restricted videos
         }
     
+    print(videourl)
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download(videourl)
     
@@ -159,7 +159,7 @@ async def downloadAndPlay(interaction: Interaction[Client], filepath: str, video
         return
 
     #downloads and plays
-    await download(interaction,filepath,videourl)
+    download(filepath,videourl)
     await startqueue(interaction,uservoice)
     return
     
@@ -216,7 +216,8 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
         
         #renames the song to be played next, if the queue is over, then removes the queue directory
         if len(paths) >=1: 
-            os.rename(f'vids/{interaction.guild.id}_queue/{paths[0]}', f'vids/{interaction.guild.id}.webm')
+            if (os.path.exists(f'vids/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
+            os.rename(f'vids/{interaction.guild.id}_queue/{paths[0]}', f'vids/{interaction.guild.id}.webm') #error when renaming to the same file name
         else:
             shutil.rmtree(f'vids/{interaction.guild.id}_queue')
 
@@ -241,7 +242,7 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
     disable_enableQueue(interaction.guild.id, False)
     return
            
-def addtoQueue(interaction: Interaction[Client], videoObj: YouTube) -> str:
+def addtoQueue(interaction: Interaction[Client], videoObj: YoutubeSearchCustom) -> str:
     '''
     adds the given video to the queue
     
@@ -376,7 +377,7 @@ async def queryLink(query:str, interaction: Interaction[Client], uservoice: Voic
         
         #adds the video to the queue and downloads it
         output = addtoQueue(interaction,videoObj)
-        await download(interaction,output,newurl)
+        download(output,newurl)
     
     #downloading is done so the user can add back to the queue now
     disable_enableQueue(interaction.guild.id, False)
@@ -386,7 +387,7 @@ async def queryLink(query:str, interaction: Interaction[Client], uservoice: Voic
     if voice is None: await startqueue(interaction,uservoice)
     return
 
-async def playVideoObj(videoObj: YouTube, interaction: Interaction[Client], uservoice: VoiceState, voice: VoiceProtocol, newint: Message = None) -> None:
+async def playVideoObj(videoObj: YoutubeSearchCustom, interaction: Interaction[Client], uservoice: VoiceState, voice: VoiceProtocol, newint: Message = None) -> None:
     '''
     the repsonce to when the user wants to play a video
     
@@ -426,7 +427,7 @@ async def playVideoObj(videoObj: YouTube, interaction: Interaction[Client], user
     #bot is in call so just download the song
     else:
         # await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
-        await download(interaction,output,videoObj.watch_url)
+        download(output,videoObj.watch_url)
     
     return
     

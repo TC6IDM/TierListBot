@@ -1,4 +1,5 @@
 #python -u "c:\Users\Owner\Desktop\TierListBot\TierListBot\bot.py"
+#Getting rate limited by youtube? refresh cookie file
 import asyncio
 import shutil
 import discord
@@ -12,6 +13,7 @@ import requests
 from tinydb import TinyDB, Query, where
 from discord.ui import Select, View
 import datetime
+from YoutubeSearchCustom import YoutubeSearchCustom
 from createQueueEmbed import createQueueEmbed
 # from pytube import Search
 from pytube import Search
@@ -23,6 +25,7 @@ import re
 from discord.ext.commands import cooldown, BucketType
 import pafy
 from debug import debug
+from ytmusicapi import YTMusic
 
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
@@ -161,10 +164,11 @@ async def endtierlist(interaction: discord.Interaction):
 
 @bot.tree.command(name = "play", description='Plays music, if the bot is in a vc it will add the song to the queue (links work too)')
 @app_commands.describe(query = "song to look up")
+@app_commands.describe(music = "uses the youtube music API instead of the regular youtube API if this option is selected")
 @app_commands.describe(im_feeling_lucky = "pick the first option in the selection")
 @app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
-async def play(interaction: discord.Interaction, query: str, im_feeling_lucky: bool = False):
-    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}\nquery: {query}')
+async def play(interaction: discord.Interaction, query: str, music: bool = True, im_feeling_lucky: bool = False):
+    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}\nquery: {query} - music: {music} - im_feeling_lucky: {im_feeling_lucky}')
         
     voice = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild) # This allows for more functionality with voice channels
     
@@ -201,22 +205,43 @@ async def play(interaction: discord.Interaction, query: str, im_feeling_lucky: b
     if  "https://open.spotify.com/track/" in query or "https://open.spotify.com/playlist/" in query:
         await interaction.response.send_message(f'Spotify links are being worked on', ephemeral = True, delete_after=5)
         return
-    #regular search
-    s = Search(query)
-    if (len(s.results) == 0):
+    
+    #youtube music search
+    if music == True : 
+        yt = YTMusic()
+        s = yt.search(query,filter="songs",limit=10)
+        videoObjList = [YoutubeSearchCustom(i) for i in s]
+    else: 
+        videoObjList = Search(query).results[:10]
+
+    # debug(s,"s.json")
+    if (len(s) == 0):
         await interaction.response.send_message(f"no results found", ephemeral = True, delete_after=5)
         return
     
+    #making too many unnessary calls to youtube api, easy way to get rate limited
+    # videoObjList = [YoutubeSearchCustom(i) for i in s]
+    
     await interaction.response.send_message(f"Searching!", ephemeral = True, delete_after=3)
 
+    
     if im_feeling_lucky:
-        videoObj = s.results[0]
+        videoObj = videoObjList[0]
+        #live video
+        if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None:
+            await interaction.response.send_message(f'You can not play live videos on the bot, Try Again', ephemeral=True, delete_after=7)
+            return
+        
+        #video too long
+        if videoObj.length_seconds > MAXVIDEOLENGTH:
+            await interaction.response.send_message(f"Video is too long, go fuck yourself.", ephemeral = True, delete_after=7)
+            return
         await playVideoObj(videoObj,interaction,uservoice,voice)
         return
     
     #build the selection and embed
-    selectionmessage = [(" "if k!=9 else "") + f"{k+1} : {v.title}\n" for k,v in enumerate(s.results[0:10])]
-    select = Select(options = [discord.SelectOption(label = f'{k+1} : {v.title}'[:99] if len(f'{k+1}: {v.title}') > 99 else f'{k+1} : {v.title}', description = f'{v.length} - {v.viewCountText}', value=k) for k,v in enumerate(s.results[0:10])])
+    selectionmessage = [(" "if k!=9 else "") + f"{k+1} : {v.title}\n" for k,v in enumerate(videoObjList[0:10])]
+    select = Select(options = [discord.SelectOption(label = f'{k+1} : {v.title}'[:99] if len(f'{k+1}: {v.title}') > 99 else f'{k+1} : {v.title}', description = f'{v.length} - {v.viewCountText}', value=k) for k,v in enumerate(videoObjList[0:10])])
     
     #callback for when an option is chosen
     async def my_mycallback(ints:Interaction[Client]):
@@ -226,7 +251,7 @@ async def play(interaction: discord.Interaction, query: str, im_feeling_lucky: b
             return
         
         #live video
-        videoObj = s.results[int(select.values[0])]
+        videoObj = videoObjList[int(select.values[0])]
         await playVideoObj(videoObj,interaction,uservoice,voice,newint)
         return
     
@@ -237,7 +262,7 @@ async def play(interaction: discord.Interaction, query: str, im_feeling_lucky: b
     view.add_item(select)
     # davidsid = 382271649724104705
     #if interaction.user.id != davidsid else f'{interaction.user.mention} Searched: "gay furry porn"\n'
-    searchstring = f'{interaction.user.mention} Searched: "*{query}*"\n' 
+    searchstring = f'{interaction.user.mention} Searched: "*{query}*" on {"YouTubeMusic" if music else "YouTube"}\n' 
     newint = await interaction.channel.send(f'{searchstring}```'+''.join(map(str, selectionmessage))+'```',view=view)
 
 @bot.tree.command(name = "queue", description='Views the queue')

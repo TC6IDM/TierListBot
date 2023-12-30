@@ -1,5 +1,7 @@
 MUSIC BOT:
 
+search youtube music instead of youtube YTMusic()
+
 chdir makes things ugly
 
 shuffle
