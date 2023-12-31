@@ -1,6 +1,6 @@
 def my_hook(d):
     if d['status'] == 'finished':
-        pass
+        print("finished")
     else:
         print(d['filename'], d['_percent_str'], d['_eta_str'])
 

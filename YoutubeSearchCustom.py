@@ -14,15 +14,15 @@ class YoutubeSearchCustom():
     
     def __init__(self, obj):
         self.obj = obj
-        if type(obj) == dict:
+        # if type(obj) == dict:
             # debug(obj, f'{random.randint(1,500000)}.json') 
-            self.length = obj['duration'] #find a way to convert this to hours minutes and seconds
-            self.vidlength = obj['duration']
-            self.length_seconds = obj['duration_seconds']
-            self.title = f"{obj['title']} - {obj['artists'][0]['name']} - {('(explicit)' if obj['isExplicit'] else '(clean)')}"
-            self.viewCountText = 'explicit' if obj['isExplicit'] else 'clean'
-            self.watch_url = f"https://music.youtube.com/watch?v={obj['videoId']}"
-            self.thumbnail_url = obj['thumbnails'][0]['url']
+        self.length = obj['duration'] #find a way to convert this to hours minutes and seconds
+        self.vidlength = obj['duration']
+        self.length_seconds = obj['duration_seconds']
+        self.title = f"{obj['title']} - {obj['artists'][0]['name']} - {('(explicit)' if obj['isExplicit'] else '(clean)')}"
+        self.viewCountText = 'explicit' if obj['isExplicit'] else 'clean'
+        self.watch_url = f"https://music.youtube.com/watch?v={obj['videoId']}"
+        self.thumbnail_url = obj['thumbnails'][0]['url']
             
             # "length": "8 minutes, 8 seconds",
             # "vidlength": "8:08",
@@ -32,14 +32,14 @@ class YoutubeSearchCustom():
             # "watch_url": "https://youtube.com/watch?v=SvKSwOIyIpw",
             # "thumbnail_url": "https://img.youtube.com/vi/SvKSwOIyIpw/maxresdefault.jpg",
             
-        elif type(obj) == YouTube:
-            self.length = obj.length
-            self.vidlength = obj.vidlength
-            self.length_seconds = obj.length_seconds
-            self.title = obj.title
-            self.viewCountText = obj.viewCountText
-            self.watch_url = obj.watch_url
-            self.thumbnail_url = obj.thumbnail_url
+        # elif type(obj) == YouTube:
+        #     self.length = obj.length
+        #     self.vidlength = obj.vidlength
+        #     self.length_seconds = obj.length_seconds
+        #     self.title = obj.title
+        #     self.viewCountText = obj.viewCountText
+        #     self.watch_url = obj.watch_url
+        #     self.thumbnail_url = obj.thumbnail_url
             
         # debug(self.obj, 'YoutubeSearchCustomList.json') 
             

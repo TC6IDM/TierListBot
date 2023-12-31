@@ -1,14 +1,10 @@
 MUSIC BOT:
 
-search youtube music instead of youtube YTMusic()
-
-chdir makes things ugly
+using chdir makes things ugly - use relative imports instead
 
 shuffle
 
 volume controls
-
-fix YouTube object - not showing views properly
 
 spotify support
 

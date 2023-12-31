@@ -4,6 +4,7 @@ from datetime import timedelta
 import datetime
 import glob
 import json
+import random
 import re
 import shutil
 from PIL import Image, ImageDraw, ImageFont
@@ -66,7 +67,7 @@ def download(filepath: str, videourl: str) -> None:
         ydl.download(videourl)
     
         
-async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceState, vc: VoiceClient = None) -> tuple[VoiceClient, discord.Message]:
+async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceState, destination: str, vc: VoiceClient = None) -> tuple[VoiceClient, discord.Message]:
     '''
     Creates a queue embed which displays the next songs in the queue
     
@@ -93,7 +94,8 @@ async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceS
     userreq = interaction.client.get_user(queinfo['userid'])
     
     #wait untill the song exists
-    while not os.path.exists(f'vids/{interaction.guild.id}.webm'):
+    while not os.path.exists(destination):
+        print(destination)
         await asyncio.sleep(1)
     
     #create embed for the song
@@ -105,34 +107,48 @@ async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceS
     embed.add_field(name="Duration",value=queinfo['duration'],inline=True)
     embed.set_footer(text=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     
-    view = SimpleView(vc)
+    view = SimpleView(vc,interaction)
     
     #sends the embed
     musicembed = await interaction.channel.send(embed=embed, view=view)
     view.musicembed = musicembed
     view.embed = embed
-    
     #loops this specific song if the user requests it
     debounce = 0 
-    while debounce == 0 or view.LOOP:
+    queue = TinyDB('queue.json')
+    User = Query()
+    res = queue.search(User.server == interaction.guild.id)
+    while debounce == 0 or res[0]['loop']:
         debounce=1
         
         #plays song
-        vc.play(discord.FFmpegPCMAudio(f'vids/{interaction.guild.id}.webm'))
-        
+        # print(queinfo['output'][1:])
+        # print(queinfo['output'][1:])
+        # print(queinfo['output'][1:])
+        # print(queinfo['output'][1:])
+        # print(queinfo['output'][1:])
+        # print(queinfo['output'][1:])
+        vc.play(discord.FFmpegPCMAudio(queinfo['output']))
+        await view.updatetitle()
         #song is on
         while (vc.is_playing() or vc.is_paused()) and vc.is_connected():
             await asyncio.sleep(1)
+            
+        
+        queue = TinyDB('queue.json')
+        User = Query()
+        res = queue.search(User.server == interaction.guild.id)
         
         # disconnect after the player has finished or if the user forces the bot to leave
         if not vc.is_connected(): 
             print("someone forced the bot to leave the channel :(")
-            view.LOOP = False
             vc.stop()
             await vc.disconnect(force = True)
             
             #reset the queue
             queue = TinyDB('queue.json')
+            queue.update({'loop': False}, where('server') == interaction.guild.id)
+            queue.update({'shuffle': False}, where('server') == interaction.guild.id)
             queue.update({'queue': []}, where('server') == interaction.guild.id)
             disable_enableQueue(interaction.guild.id, False)
             break
@@ -165,7 +181,7 @@ async def downloadAndPlay(interaction: Interaction[Client], filepath: str, video
     
 async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) -> None:
     '''
-    starts the queue in 
+    starts the queue in the given channel
     
     :param interaction: 
         discord interaction object
@@ -183,22 +199,30 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
     res = queue.search(User.server == interaction.guild.id)
     
     vc = None
-    
+    rand = 0
     #loops untill the queue is finished
     while (len(res[0]['queue']) >=1):
         
         # plays the song next in the queue
-        queinfo = res[0]['queue'][0]
+        print(rand)
+        print(res[0]['queue'][rand])
+        queinfo = res[0]['queue'][rand]
         print(f'Now playing: {queinfo["trackname"]} in {interaction.guild.name} - {interaction.channel.name}')
-        vc,musicembed = await playtrack(interaction,queinfo,uservoice,vc)
+        vc,musicembed = await playtrack(interaction,queinfo,uservoice,queinfo['output'],vc)
         
         #cleans up
         vc.stop()
         await musicembed.delete()
         try:
-            os.remove(f'vids/{interaction.guild.id}.webm')
+            os.remove(queinfo['output'])
         except:
             pass
+        
+        queue = TinyDB('queue.json')
+        User = Query()
+        res = queue.search(User.server == interaction.guild.id)
+        res[0]['queue'].pop(rand)
+        queue.update({'queue': res[0]['queue']}, where('server') == interaction.guild.id)
         
         # Create a new queue directory if it does not exist
         dir_path = 'C:/Users/Owner/Desktop/TierListBot/TierListBot/vids/'+str(interaction.guild.id)+"_queue/"
@@ -213,19 +237,19 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
         #sorts them by creation time
         paths.sort(key=os.path.getctime)
         os.chdir('C:/Users/Owner/Desktop/TierListBot/TierListBot')
-        
+        queue = TinyDB('queue.json')
+        User = Query()
+        res = queue.search(User.server == interaction.guild.id)
+        rand = random.randint(0,len(paths)-1) if (res[0]['shuffle'] and len(paths) != 0) else 0
         #renames the song to be played next, if the queue is over, then removes the queue directory
         if len(paths) >=1: 
-            if (os.path.exists(f'vids/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
-            os.rename(f'vids/{interaction.guild.id}_queue/{paths[0]}', f'vids/{interaction.guild.id}.webm') #error when renaming to the same file name
+            if (os.path.exists(queinfo['output'])): os.remove(queinfo['output'])
+            # os.rename(f'vids/{interaction.guild.id}_queue/{paths[rand]}', f'vids/{interaction.guild.id}.webm') #error when renaming to the same file name
         else:
             shutil.rmtree(f'vids/{interaction.guild.id}_queue')
 
         #removes the song from the queue
-        queue = TinyDB('queue.json')
-        User = Query()
-        res = queue.search(User.server == interaction.guild.id)
-        queue.update({'queue': res[0]['queue'][1:]}, where('server') == interaction.guild.id)
+        
         queue = TinyDB('queue.json')
         User = Query()
         
@@ -235,9 +259,11 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
     #stops the bot from playing, disconnects and removes all queue files
     vc.stop()
     await vc.disconnect(force = True)
-    if (os.path.exists(f'vids/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
+    # if (os.path.exists(f'vids/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
     if (os.path.exists(f'vids/{interaction.guild.id}_queue')): shutil.rmtree(f'vids/{interaction.guild.id}_queue')
     queue = TinyDB('queue.json')
+    queue.update({'loop': False}, where('server') == interaction.guild.id)
+    queue.update({'shuffle': False}, where('server') == interaction.guild.id)
     queue.update({'queue': []}, where('server') == interaction.guild.id)
     disable_enableQueue(interaction.guild.id, False)
     return
@@ -256,8 +282,8 @@ def addtoQueue(interaction: Interaction[Client], videoObj: YoutubeSearchCustom) 
     '''
     
     #gets the filepaths for the output and the queue directory
-    output = 'C:/Users/Owner/Desktop/TierListBot/TierListBot/vids/'+str(interaction.guild.id)+'.webm'
-    outputExists = os.path.exists(output)
+    # output = 'C:/Users/Owner/Desktop/TierListBot/TierListBot/vids/'+str(interaction.guild.id)+'.webm'
+    # outputExists = os.path.exists(output)
     dir_path = 'C:/Users/Owner/Desktop/TierListBot/TierListBot/vids/'+str(interaction.guild.id)+"_queue/"
     folderExists = os.path.exists(dir_path)
     
@@ -266,18 +292,18 @@ def addtoQueue(interaction: Interaction[Client], videoObj: YoutubeSearchCustom) 
         os.makedirs(dir_path)
         
     #if there is already one song in the queue, then we make the name of the next song equal to the last song in the queue's number plus one
-    if outputExists:
-        #gets files in the queue directory and sorts them
-        files = os.listdir(dir_path)
-        os.chdir(dir_path)
-        files.sort(key=os.path.getctime)
+    #gets files in the queue directory and sorts them
+    
+    files = os.listdir(dir_path)
+    os.chdir(dir_path)
+    files.sort(key=os.path.getctime)
         
-        #gets the number of the last song in the queue and adds one to it
-        queNumber = int(re.search(r'^(.*?)(?=\.)', files[-1]).group(0))+1 if len(files) >=1 else 0
+    #gets the number of the last song in the queue and adds one to it
+    queNumber = int(re.search(r'^(.*?)(?=\.)', files[-1]).group(0))+1 if len(files) >=1 else 0
         
-        #output dir is is where the new song is to be downloaded into
-        output = '/vids/'+str(interaction.guild.id)+'_queue/'+str(queNumber)+'.webm'
-        os.chdir('C:/Users/Owner/Desktop/TierListBot/TierListBot')
+    #output dir is is where the new song is to be downloaded into
+    output = 'vids/'+str(interaction.guild.id)+'_queue/'+str(queNumber)+'.webm'
+    os.chdir('C:/Users/Owner/Desktop/TierListBot/TierListBot')
         
     #adds the song to the queue
     queue = TinyDB('queue.json')
@@ -287,7 +313,7 @@ def addtoQueue(interaction: Interaction[Client], videoObj: YoutubeSearchCustom) 
     if len(res) == 0:
         queue.insert({'server': interaction.guild.id, 'queue': 
             [{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'output':output}],
-            # 'loop': False, 'shuffle': False, 
+            'loop': False, 'shuffle': False, 
             'disabled': False})
     else:
         queue.update({'queue': res[0]['queue']+[{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'output':output}]}, where('server') == interaction.guild.id)
@@ -449,7 +475,7 @@ def getQueueFromDB(guildID: int) -> tuple[List,TinyDB]:
     
     #if there is no queue insert a blank queue
     if len(res) == 0:
-        queue.insert({'server': guildID, 'queue': [], 'disabled': False})
+        queue.insert({'server': guildID, 'queue': [], 'loop': False, 'shuffle': False, 'disabled': False})
         User = Query()
         res = queue.search(User.server == guildID)
     return res,queue
@@ -472,7 +498,7 @@ def disable_enableQueue(guildID: int, disable: bool = True) -> None:
     
     #if server is not in the databse, add it
     if len(res) == 0:
-        queue.insert({'server': guildID, 'queue': [], 'disabled': disable})
+        queue.insert({'server': guildID, 'queue': [], 'loop': False, 'shuffle': False, 'disabled': disable})
         return
     
     #disables or enables the queue

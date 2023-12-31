@@ -176,9 +176,11 @@ async def play(interaction: discord.Interaction, query: str, music: bool = True,
     res,queue = getQueueFromDB(interaction.guild.id)
         
     #removes old queue if the bot is not in a vc 
-    if (os.path.exists(f'vids/{interaction.guild.id}.webm') or os.path.exists(f'vids/{interaction.guild.id}_queue') or len(res[0]['queue']) >=1) and voice is None:
-        if (os.path.exists(f'vids/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
+    if (os.path.exists(f'vids/{interaction.guild.id}_queue') or len(res[0]['queue']) >=1) and voice is None:
+        # if (os.path.exists(f'vids/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
         if (os.path.exists(f'vids/{interaction.guild.id}_queue')): shutil.rmtree(f'vids/{interaction.guild.id}_queue')
+        queue.update({'loop': False}, where('server') == interaction.guild.id)
+        queue.update({'shuffle': False}, where('server') == interaction.guild.id)
         queue.update({'queue': []}, where('server') == interaction.guild.id)
         disable_enableQueue(interaction.guild.id, False)
     

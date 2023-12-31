@@ -1,7 +1,7 @@
 from ast import List
 import datetime
 import discord
-from tinydb import TinyDB, where
+from tinydb import Query, TinyDB, where
 
 from createQueueEmbed import createQueueEmbed
 from pytube.__main__ import YouTube
@@ -91,37 +91,44 @@ class SimpleView(discord.ui.View):
     '''
     
     vc: discord.VoiceClient
-    LOOP: bool
     embed: discord.Embed
     musicembed: discord.Message
+    guildid: int
     
-    
-    def __init__(self, vc: discord.VoiceClient):
+    def __init__(self, vc: discord.VoiceClient, interaction: discord.Interaction):
         super().__init__()
         self.vc = vc
-        self.LOOP = False
         self.embed = None
+        self.musicembed = None
+        self.guildid = interaction.guild.id
         
     async def updatetitle(self):
         '''
         updates the title depending on if the bot is playing, paused, looped, or shuffling (TODO)
         '''
+        queue = TinyDB('queue.json')
+        User = Query()
+        res = queue.search(User.server == self.guildid)
         
         if self.vc.is_playing():
             #playing and not looping
             self.embed.title = "🎶 Now Playing ▶️"
             
-            if self.LOOP:
+            if res[0]['loop']:
                 #playing and looping
                 self.embed.title = "🎶 Now Playing 🔁"
         else:
             #paused and not looping
             self.embed.title = "🎶 Paused ⏸️"
-            if self.LOOP:
+            if res[0]['loop']:
                 #paused and looping
                 self.embed.title = "🎶 Paused 🔁"
+        
+        if res[0]['shuffle']:
+            self.embed.title += " 🔀"
             
         await self.musicembed.edit(embed=self.embed)
+        return self.embed.title
         
     @discord.ui.button(label='Pause', style=discord.ButtonStyle.grey, custom_id="Pause")
     async def Pause(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -171,6 +178,8 @@ class SimpleView(discord.ui.View):
         #clears the queue and stops the bot (also stops looping)
         self.LOOP = False
         queue = TinyDB('queue.json')
+        queue.update({'loop': False}, where('server') == interaction.guild.id)
+        queue.update({'shuffle': False}, where('server') == interaction.guild.id)
         queue.update({'queue': []}, where('server') == interaction.guild.id)
         self.vc.stop()
         
@@ -180,13 +189,37 @@ class SimpleView(discord.ui.View):
         The Loop button, Loops the current song
         '''
         print(f'Loop button pressed by {interaction.user.name} in {interaction.guild.name} - {interaction.channel.name}')
-        if not self.LOOP:
-            #if not looping, loop
-            self.LOOP = True
+        queue = TinyDB('queue.json')
+        User = Query()
+        res = queue.search(User.server == interaction.guild.id)
+    
+        if not res[0]['loop']:
+            queue.update({'loop': True}, where('server') == interaction.guild.id)
             await self.updatetitle()
             await interaction.response.send_message('Looping', ephemeral=True, delete_after=3)
         else:
             #if looping, unloop
-            self.LOOP = False
+            queue.update({'loop': False}, where('server') == interaction.guild.id)
             await self.updatetitle()
             await interaction.response.send_message('Unlooping', ephemeral=True, delete_after=3)
+    
+    @discord.ui.button(label='Shuffle', style=discord.ButtonStyle.blurple, custom_id="Shuffle")
+    async def Shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
+        '''
+        The LShuffleoop button, Shuffles the current song
+        '''
+        print(f'Shuffle button pressed by {interaction.user.name} in {interaction.guild.name} - {interaction.channel.name}')
+        queue = TinyDB('queue.json')
+        User = Query()
+        res = queue.search(User.server == interaction.guild.id)
+    
+        if not res[0]['shuffle']:
+            queue.update({'shuffle': True}, where('server') == interaction.guild.id)
+            await self.updatetitle()
+            await interaction.response.send_message('Shuffleing', ephemeral=True, delete_after=3)
+        else:
+            #if Shuffleing, UnShuffle
+            queue.update({'shuffle': False}, where('server') == interaction.guild.id)
+            await self.updatetitle()
+            await interaction.response.send_message('UnShuffleing', ephemeral=True, delete_after=3)
+    
