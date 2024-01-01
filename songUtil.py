@@ -348,7 +348,7 @@ async def queryLink(query:str, interaction: Interaction[Client], uservoice: Voic
         videoObj = videoObj[0]
         # videoObj = YouTube(query) #(TODO) FIX THIS
         # print(len(videoObj))
-        await interaction.response.send_message(f'playing', ephemeral = True, delete_after=5)
+        # await interaction.response.send_message(f'playing', ephemeral = True, delete_after=5)
         await playVideoObj(videoObj, interaction, uservoice, voice)
         return
     
@@ -447,12 +447,12 @@ async def playVideoObj(videoObj: YoutubeSearchCustom, interaction: Interaction[C
     
     #bot is not in call so join the call and play
     if voice is None:
-        # await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
+        await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
         await downloadAndPlay(interaction,output,videoObj.watch_url,uservoice)
     
     #bot is in call so just download the song
     else:
-        # await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
+        await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
         download(output,videoObj.watch_url)
     
     return

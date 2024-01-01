@@ -217,14 +217,12 @@ async def play(interaction: discord.Interaction, query: str, music: bool = True,
         videoObjList = Search(query).results[:10]
 
     # debug(s,"s.json")
-    if (len(s) == 0):
+    if (len(videoObjList) == 0):
         await interaction.response.send_message(f"no results found", ephemeral = True, delete_after=5)
         return
     
     #making too many unnessary calls to youtube api, easy way to get rate limited
     # videoObjList = [YoutubeSearchCustom(i) for i in s]
-    
-    await interaction.response.send_message(f"Searching!", ephemeral = True, delete_after=3)
 
     
     if im_feeling_lucky:
@@ -241,6 +239,7 @@ async def play(interaction: discord.Interaction, query: str, music: bool = True,
         await playVideoObj(videoObj,interaction,uservoice,voice)
         return
     
+    await interaction.response.send_message(f"Searching!", ephemeral = True, delete_after=3)
     #build the selection and embed
     selectionmessage = [(" "if k!=9 else "") + f"{k+1} : {v.title}\n" for k,v in enumerate(videoObjList[0:10])]
     select = Select(options = [discord.SelectOption(label = f'{k+1} : {v.title}'[:99] if len(f'{k+1}: {v.title}') > 99 else f'{k+1} : {v.title}', description = f'{v.length} - {v.viewCountText}', value=k) for k,v in enumerate(videoObjList[0:10])])
@@ -254,7 +253,7 @@ async def play(interaction: discord.Interaction, query: str, music: bool = True,
         
         #live video
         videoObj = videoObjList[int(select.values[0])]
-        await playVideoObj(videoObj,interaction,uservoice,voice,newint)
+        await playVideoObj(videoObj,ints,uservoice,voice,newint)
         return
     
     select.callback = my_mycallback
