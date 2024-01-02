@@ -209,6 +209,7 @@ async def play(interaction: discord.Interaction, query: str, music: bool = True,
         if (os.path.exists(f'vids/{interaction.guild.id}_queue')): shutil.rmtree(f'vids/{interaction.guild.id}_queue')
         queue.update({'loop': False}, where('server') == interaction.guild.id)
         queue.update({'shuffle': False}, where('server') == interaction.guild.id)
+        queue.update({'disabled': False}, where('server') == interaction.guild.id)
         queue.update({'queue': []}, where('server') == interaction.guild.id)
         disable_enableQueue(interaction.guild.id, False)
     
@@ -239,23 +240,23 @@ async def play(interaction: discord.Interaction, query: str, music: bool = True,
     
     #runs the command for a spotify link
     if  "https://open.spotify.com/track/" in query or "https://open.spotify.com/playlist/" in query:
-        try:
-            await interaction.response.send_message(f'Spotify links are being worked on', ephemeral = True, delete_after=5)
-        except:
-            pass
-        # await querySpotifyLink(query, interaction, uservoice, voice)
+        # try:
+        #     await interaction.response.send_message(f'Spotify links are being worked on', ephemeral = True, delete_after=5)
+        # except:
+        #     pass
+        await querySpotifyLink(query, interaction, uservoice, voice)
         return
     
     #youtube music search
     if music: 
         yt = YTMusic()
-        s = yt.search(query,filter="songs",limit=10)
+        s = yt.search(query,filter="songs",limit=10)[:10]
         videoObjList = [YoutubeSearchCustom(i) for i in s]
         videoObjList2 = Search(query).results[:10]
     else: 
         videoObjList = Search(query).results[:10]
         yt = YTMusic()
-        s = yt.search(query,filter="songs",limit=10)
+        s = yt.search(query,filter="songs",limit=10)[:10]
         videoObjList2 = [YoutubeSearchCustom(i) for i in s]
 
     # debug(s,"s.json")

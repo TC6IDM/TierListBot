@@ -121,7 +121,7 @@ class SimpleView(discord.ui.View):
         '''
         updates the title depending on if the bot is playing, paused, looped, or shuffling
         '''
-        queue = TinyDB('queue.json')
+        queue = TinyDB('databases/queue.json')
         User = Query()
         res = queue.search(User.server == self.guildid)
         
@@ -198,9 +198,10 @@ class SimpleView(discord.ui.View):
             pass
         #clears the queue and stops the bot (also stops looping)
         self.LOOP = False
-        queue = TinyDB('queue.json')
+        queue = TinyDB('databases/queue.json')
         queue.update({'loop': False}, where('server') == interaction.guild.id)
         queue.update({'shuffle': False}, where('server') == interaction.guild.id)
+        queue.update({'disabled': False}, where('server') == interaction.guild.id)
         queue.update({'queue': []}, where('server') == interaction.guild.id)
         self.vc.stop()
         
@@ -210,7 +211,7 @@ class SimpleView(discord.ui.View):
         The Loop button, Loops the current song
         '''
         print(f'Loop button pressed by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
-        queue = TinyDB('queue.json')
+        queue = TinyDB('databases/queue.json')
         User = Query()
         res = queue.search(User.server == interaction.guild.id)
     
@@ -236,7 +237,7 @@ class SimpleView(discord.ui.View):
         The Shuffleoop button, Shuffles the current song
         '''
         print(f'Shuffle button pressed by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
-        queue = TinyDB('queue.json')
+        queue = TinyDB('databases/queue.json')
         User = Query()
         res = queue.search(User.server == interaction.guild.id)
     

@@ -19,6 +19,7 @@ import yt_dlp
 import os
 import ffmpeg
 from YoutubeSearchCustom import YoutubeSearchCustom
+from debug import debug
 from pytube import YouTube
 # from pytube import YouTube
 # from pytube import Search
@@ -149,6 +150,7 @@ async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceS
             queue = TinyDB('databases/queue.json')
             queue.update({'loop': False}, where('server') == interaction.guild.id)
             queue.update({'shuffle': False}, where('server') == interaction.guild.id)
+            queue.update({'disabled': False}, where('server') == interaction.guild.id)
             queue.update({'queue': []}, where('server') == interaction.guild.id)
             disable_enableQueue(interaction.guild.id, False)
             break
@@ -206,6 +208,7 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
     
     vc = None
     rand = 0
+    print("starting queue maybe>?")
     #loops untill the queue is finished
     while (len(res[0]['queue']) >=1):
         
@@ -270,6 +273,7 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
     queue = TinyDB('databases/queue.json')
     queue.update({'loop': False}, where('server') == interaction.guild.id)
     queue.update({'shuffle': False}, where('server') == interaction.guild.id)
+    queue.update({'disabled': False}, where('server') == interaction.guild.id)
     queue.update({'queue': []}, where('server') == interaction.guild.id)
     disable_enableQueue(interaction.guild.id, False)
     return
@@ -315,7 +319,7 @@ def addtoQueue(interaction: Interaction[Client], videoObj: YoutubeSearchCustom) 
     queue = TinyDB('databases/queue.json')
     User = Query()
     res = queue.search(User.server == interaction.guild.id)
-    
+    print(res)
     if len(res) == 0:
         queue.insert({'server': interaction.guild.id, 'queue': 
             [{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'output':output}],
@@ -501,7 +505,7 @@ def getQueueFromDB(guildID: int) -> tuple[List,TinyDB]:
     res = queue.search(User.server == guildID)
     
     #if there is no queue insert a blank queue
-    if len(res[0]["queue"]) == 0:
+    if len(res) == 0:
         queue.insert({'server': guildID, 'queue': [], 'loop': False, 'shuffle': False, 'disabled': False})
         User = Query()
         res = queue.search(User.server == guildID)
@@ -531,3 +535,162 @@ def disable_enableQueue(guildID: int, disable: bool = True) -> None:
     #disables or enables the queue
     queue.update({'disabled': disable}, where('server') == guildID)
     return
+
+
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+from spotipy.oauth2 import SpotifyClientCredentials
+from dotenv import load_dotenv
+import os
+from ytmusicapi import YTMusic
+
+
+async def querySpotifyLink(query:str, interaction: Interaction[Client], uservoice: VoiceState, voice: VoiceProtocol) -> None:
+    '''
+    redo this
+    this query will be ran when the user wants to play a song from a link
+    works with playlists and videos
+    
+    :param query:
+        the possible link that the user sends in
+    :param interaction: 
+        discord interaction object
+    :param uservoice:
+        the voice channel the user is in
+    :param voice:
+        the voice channel the bot is in
+    '''
+    load_dotenv()  # Load variables from .env file
+    client_id = os.getenv("CLIENT_ID")
+    client_secret = os.getenv("CLIENT_SECRET")
+    client_credentials_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
+    session = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+    print(query)
+    
+    if 'track' in query:
+        try:
+            spotifyTrack = session.track(query)
+        except:
+            await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
+            return
+        
+        youtubesearchquery = f'{spotifyTrack["name"]} {spotifyTrack["artists"][0]["name"]}'
+        print(youtubesearchquery)
+        yt = YTMusic()
+        s = yt.search(youtubesearchquery,filter="songs")
+        videoObjList = [YoutubeSearchCustom(i) for i in s]
+        print(len(videoObjList))
+        # videoObj = Search(youtubesearchquery).results
+        if len(videoObjList) == 0: 
+            try:
+                await interaction.response.send_message(f"Can not find an appropiate video for this song link, try another", ephemeral = True, delete_after=5)
+            except:
+                pass
+            return
+        debug(spotifyTrack, 'spotifytrack-HYPNOSIS.json')
+        videoObj = findRightVideo(videoObjList, spotifyTrack)
+        # debug(videoObj.obj, 'ytmusictrack.json')
+        if videoObj is None:
+            videoObj = videoObjList[0]
+            
+        await playVideoObj(videoObj, interaction, uservoice, voice)
+        return
+    
+    
+    if 'playlist' not in query:
+        try:
+            await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
+        except:
+            pass
+        return
+    
+    try:
+        spotifyPlaylist = session.playlist(query)
+    except:
+        await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
+        return
+    
+    if len(spotifyPlaylist) == 0:
+        try:
+            await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
+        except:
+            pass
+        return
+    
+    # Playlist is real, send out default message and stop people from adding more songs to the queue
+    await interaction.response.send_message(f'analysing playlist', ephemeral = True, delete_after=5)
+    waitingmessage = await interaction.channel.send(f'analysing playlist from {interaction.user.mention} - {query} (?/?)')
+    
+    
+    #disables people adding to the queue while the playlist is being downloaded
+    disable_enableQueue(interaction.guild.id, True)
+    # debug(res)
+    endtext = ""
+    #enumerates through the playlist object
+    for v,track in enumerate(spotifyPlaylist['tracks']['items']):
+        
+        #edits the message to show where in the playlist we are at
+        await waitingmessage.edit(content=f'analysing playlist from {interaction.user.mention} - {query} ({v+1}/{len(spotifyPlaylist["tracks"]["items"])})\n{endtext}')
+        
+        youtubesearchquery = f'{track["track"]["name"]} {track["track"]["artists"][0]["name"]}'
+        print(youtubesearchquery)
+        yt = YTMusic()
+        s = yt.search(youtubesearchquery,filter="songs")
+        videoObjList = [YoutubeSearchCustom(i) for i in s]
+        # videoObj = Search(youtubesearchquery).results
+        if len(videoObjList) == 0: 
+            endtext += f'song {v+1} - {youtubesearchquery} was not added to the queue (Can not find an appropiate video for this song link)\n'
+            continue
+        
+        videoObj = findRightVideo(videoObjList, track["track"])
+        
+        if videoObj is None:
+            videoObj = videoObjList[0]
+            
+        # videoObj = YouTube(newurl)
+        if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None: 
+            endtext += f'song {v+1} - {videoObj.title} was not added to the queue (possibly live video)\n'
+            continue
+        if videoObj.length_seconds > MAXVIDEOLENGTH: 
+            endtext += f'song {v+1} - {videoObj.title} was not added to the queue (video too long)\n'
+            continue
+        
+        #adds the video to the queue and downloads it
+        output = addtoQueue(interaction,videoObj)
+        download(output,videoObj.watch_url)
+    
+    #downloading is done so the user can add back to the queue now
+    disable_enableQueue(interaction.guild.id, False)
+    
+    #delete the message and start the queue when its done downloading
+    await waitingmessage.delete()
+    if voice is None: await startqueue(interaction,uservoice)
+    return
+
+
+def findRightVideo(videoObjList: list[YoutubeSearchCustom], spotifyTrack:dict) -> YoutubeSearchCustom:
+
+    for i in videoObjList:
+        debug(spotifyTrack, 'spotifyTrack.json')
+        if i.obj['isExplicit'] and spotifyTrack['explicit'] or not i.obj['isExplicit'] and not spotifyTrack['explicit']:
+            i.value += 1
+        if i.obj['title'] == spotifyTrack['name']:
+            i.value += 1
+        if i.obj['album']['name'] == spotifyTrack['album']['name']:
+            i.value += 1
+        if abs(i.obj['duration_seconds'] - spotifyTrack['duration_ms'] / 1000) <= 5:
+            i.value += 1
+        if i.obj['artists'][0]['name'] == spotifyTrack['artists'][0]['name']:
+            i.value += 1
+        
+        # print(i.value)
+    
+    videoObjList.sort(key=lambda x: x.value, reverse=True)
+    print(f'Accuracy: {videoObjList[0].value}')
+    #maybe check these for a better final result
+    #i.obj['title'] against spotifyTrack['name']
+    #i.obj['album']['name'] against spotifyTrack['album']['name']
+    #i.obj['duration_seconds'] against spotifyTrack['duration_ms']
+    #i.obj['artists'][0]['name'] against spotifyTrack['artists'][0]['name']
+    #i.obj['isExplicit'] against spotifyTrack['explicit']
+    return videoObjList[0] if len(videoObjList) != 0 else None

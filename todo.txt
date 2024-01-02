@@ -4,8 +4,13 @@ using chdir makes things ugly - use relative instead
 
 volume controls
 
-spotify support
+in desperate need of better logs
 
+spotify artists / albums
+
+ytmusic links?
+
+clean up music embed
 
 TIERLIST:
 

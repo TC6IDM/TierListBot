@@ -11,9 +11,11 @@ class YoutubeSearchCustom():
     viewCountText: str
     watch_url: str
     thumbnail_url: str
+    value:str
     
     def __init__(self, obj):
         self.obj = obj
+        self.value = 0
         # if type(obj) == dict:
             # debug(obj, f'{random.randint(1,500000)}.json') 
         self.length = obj['duration'] #find a way to convert this to hours minutes and seconds
@@ -23,7 +25,15 @@ class YoutubeSearchCustom():
         self.viewCountText = 'explicit' if obj['isExplicit'] else 'clean'
         self.watch_url = f"https://music.youtube.com/watch?v={obj['videoId']}"
         self.thumbnail_url = obj['thumbnails'][0]['url']
-            
+        
+        # print(self.title)
+        # print(self.viewCountText)
+        # print(self.watch_url)
+        # print(self.thumbnail_url)
+        # print(self.length)
+        # print(self.vidlength)
+        # print(self.length_seconds)
+                    
             # "length": "8 minutes, 8 seconds",
             # "vidlength": "8:08",
             # "length_seconds": 488,
