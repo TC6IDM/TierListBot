@@ -1,17 +1,11 @@
 MUSIC BOT:
 
-using chdir makes things ugly - use relative imports instead
-
-shuffle
+using chdir makes things ugly - use relative instead
 
 volume controls
 
 spotify support
 
-auto delete queue message before it times out
-auto delete search message before it times out
-
-stop user from queuing song when one is downloading (other than playlist)
 
 TIERLIST:
 

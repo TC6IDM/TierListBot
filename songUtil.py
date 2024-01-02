@@ -115,7 +115,7 @@ async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceS
     view.embed = embed
     #loops this specific song if the user requests it
     debounce = 0 
-    queue = TinyDB('queue.json')
+    queue = TinyDB('databases/queue.json')
     User = Query()
     res = queue.search(User.server == interaction.guild.id)
     while debounce == 0 or res[0]['loop']:
@@ -135,7 +135,7 @@ async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceS
             await asyncio.sleep(1)
             
         
-        queue = TinyDB('queue.json')
+        queue = TinyDB('databases/queue.json')
         User = Query()
         res = queue.search(User.server == interaction.guild.id)
         
@@ -146,7 +146,7 @@ async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceS
             await vc.disconnect(force = True)
             
             #reset the queue
-            queue = TinyDB('queue.json')
+            queue = TinyDB('databases/queue.json')
             queue.update({'loop': False}, where('server') == interaction.guild.id)
             queue.update({'shuffle': False}, where('server') == interaction.guild.id)
             queue.update({'queue': []}, where('server') == interaction.guild.id)
@@ -171,7 +171,10 @@ async def downloadAndPlay(interaction: Interaction[Client], filepath: str, video
     
     # user is not in a voice channel
     if uservoice.channel is None:
-        await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=5)
+        try:
+            await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=5)
+        except:
+            pass
         return
 
     #downloads and plays
@@ -190,11 +193,14 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
     '''
     # user is not in a voice channel
     if uservoice.channel is None:
-        await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=5)
+        try:
+            await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=5)
+        except:
+            pass
         return
     
     #gets the queue
-    queue = TinyDB('queue.json')
+    queue = TinyDB('databases/queue.json')
     User = Query()
     res = queue.search(User.server == interaction.guild.id)
     
@@ -218,10 +224,10 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
         except:
             pass
         
-        queue = TinyDB('queue.json')
+        queue = TinyDB('databases/queue.json')
         User = Query()
         res = queue.search(User.server == interaction.guild.id)
-        res[0]['queue'].pop(rand)
+        if len(res[0]['queue']) != 0 : res[0]['queue'].pop(rand)
         queue.update({'queue': res[0]['queue']}, where('server') == interaction.guild.id)
         
         # Create a new queue directory if it does not exist
@@ -237,7 +243,7 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
         #sorts them by creation time
         paths.sort(key=os.path.getctime)
         os.chdir('C:/Users/Owner/Desktop/TierListBot/TierListBot')
-        queue = TinyDB('queue.json')
+        queue = TinyDB('databases/queue.json')
         User = Query()
         res = queue.search(User.server == interaction.guild.id)
         rand = random.randint(0,len(paths)-1) if (res[0]['shuffle'] and len(paths) != 0) else 0
@@ -250,7 +256,7 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
 
         #removes the song from the queue
         
-        queue = TinyDB('queue.json')
+        queue = TinyDB('databases/queue.json')
         User = Query()
         
         #gets the new queue
@@ -261,7 +267,7 @@ async def startqueue(interaction: Interaction[Client], uservoice: VoiceState) ->
     await vc.disconnect(force = True)
     # if (os.path.exists(f'vids/{interaction.guild.id}.webm')): os.remove(f'vids/{interaction.guild.id}.webm')
     if (os.path.exists(f'vids/{interaction.guild.id}_queue')): shutil.rmtree(f'vids/{interaction.guild.id}_queue')
-    queue = TinyDB('queue.json')
+    queue = TinyDB('databases/queue.json')
     queue.update({'loop': False}, where('server') == interaction.guild.id)
     queue.update({'shuffle': False}, where('server') == interaction.guild.id)
     queue.update({'queue': []}, where('server') == interaction.guild.id)
@@ -306,7 +312,7 @@ def addtoQueue(interaction: Interaction[Client], videoObj: YoutubeSearchCustom) 
     os.chdir('C:/Users/Owner/Desktop/TierListBot/TierListBot')
         
     #adds the song to the queue
-    queue = TinyDB('queue.json')
+    queue = TinyDB('databases/queue.json')
     User = Query()
     res = queue.search(User.server == interaction.guild.id)
     
@@ -320,7 +326,7 @@ def addtoQueue(interaction: Interaction[Client], videoObj: YoutubeSearchCustom) 
     
     return output
 
-async def queryLink(query:str, interaction: Interaction[Client], uservoice: VoiceState, voice: VoiceProtocol) -> None:
+async def queryYouTubeLink(query:str, interaction: Interaction[Client], uservoice: VoiceState, voice: VoiceProtocol) -> None:
     '''
     this query will be ran when the user wants to play a song from a link
     works with playlists and videos
@@ -343,10 +349,13 @@ async def queryLink(query:str, interaction: Interaction[Client], uservoice: Voic
         query = f'https://www.youtube.com/watch?v={str(video_id.group(0))}'
         videoObj = Search(query).results
         if len(videoObj) == 0: 
-            await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
+            try:
+                await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
+            except:
+                pass
             return
         videoObj = videoObj[0]
-        # videoObj = YouTube(query) #(TODO) FIX THIS
+        # videoObj = YouTube(query)
         # print(len(videoObj))
         # await interaction.response.send_message(f'playing', ephemeral = True, delete_after=5)
         await playVideoObj(videoObj, interaction, uservoice, voice)
@@ -354,16 +363,22 @@ async def queryLink(query:str, interaction: Interaction[Client], uservoice: Voic
     
     #returns if the given link is also not a playlist
     if ('&list=' not in query and '?list='not in query) or requests.get(query).status_code != 200: 
-        await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
+        try:
+            await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
+        except:
+            pass
         return
 
     #gets the playlist object and checks if it is a real playlist
     playlist = Playlist(query)
     if len(playlist) == 0:
-        await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
+        try:
+            await interaction.response.send_message(f"invalid youtube link", ephemeral = True, delete_after=5)
+        except:
+            pass
         return
     
-    # Playlist is real, send out default message and stop people from adding more songs to the queue (TODO)
+    # Playlist is real, send out default message and stop people from adding more songs to the queue
     await interaction.response.send_message(f'analysing playlist', ephemeral = True, delete_after=5)
     waitingmessage = await interaction.channel.send(f'analysing playlist from {interaction.user.mention} - {query} (?/?)')
     
@@ -393,7 +408,7 @@ async def queryLink(query:str, interaction: Interaction[Client], uservoice: Voic
             endtext += f'song {v+1} - {i} was not added to the queue (url broken)\n'
             continue
         videoObj = videoObj[0]
-        # videoObj = YouTube(newurl) #(TODO) FIX THIS
+        # videoObj = YouTube(newurl)
         if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None: 
             endtext += f'song {v+1} - {videoObj.title} was not added to the queue (possibly live video)\n'
             continue
@@ -431,12 +446,18 @@ async def playVideoObj(videoObj: YoutubeSearchCustom, interaction: Interaction[C
     
     #live video
     if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None:
-        await interaction.response.send_message(f'You can not play live videos on the bot, Try Again', ephemeral=True, delete_after=7)
+        try:
+            await interaction.response.send_message(f'You can not play live videos on the bot, Try Again', ephemeral=True, delete_after=7)
+        except:
+            pass
         return
     
     #video too long
     if videoObj.length_seconds > MAXVIDEOLENGTH:
-        await interaction.response.send_message(f"Video is too long, go fuck yourself.", ephemeral = True, delete_after=7)
+        try:
+            await interaction.response.send_message(f"Video is too long, go fuck yourself.", ephemeral = True, delete_after=7)
+        except:
+            pass
         return
     
     #delete old interaction if we need to
@@ -447,12 +468,18 @@ async def playVideoObj(videoObj: YoutubeSearchCustom, interaction: Interaction[C
     
     #bot is not in call so join the call and play
     if voice is None:
-        await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
+        try:
+            await interaction.response.send_message(f"playing", ephemeral = True, delete_after=3)
+        except:
+            pass
         await downloadAndPlay(interaction,output,videoObj.watch_url,uservoice)
     
     #bot is in call so just download the song
     else:
-        await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
+        try:
+            await interaction.response.send_message(f"adding to Queue", ephemeral = True, delete_after=3)
+        except:
+            pass
         download(output,videoObj.watch_url)
     
     return
@@ -469,12 +496,12 @@ def getQueueFromDB(guildID: int) -> tuple[List,TinyDB]:
     '''
     
     #gets the queue
-    queue = TinyDB('queue.json')
+    queue = TinyDB('databases/queue.json')
     User = Query()
     res = queue.search(User.server == guildID)
     
     #if there is no queue insert a blank queue
-    if len(res) == 0:
+    if len(res[0]["queue"]) == 0:
         queue.insert({'server': guildID, 'queue': [], 'loop': False, 'shuffle': False, 'disabled': False})
         User = Query()
         res = queue.search(User.server == guildID)
@@ -492,7 +519,7 @@ def disable_enableQueue(guildID: int, disable: bool = True) -> None:
     '''
     
     #gets the queue
-    queue = TinyDB('queue.json')
+    queue = TinyDB('databases/queue.json')
     User = Query()
     res = queue.search(User.server == guildID)
     

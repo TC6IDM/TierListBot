@@ -58,48 +58,68 @@ async def on_ready():
 @bot.tree.error
 async def on_app_command_error(interacton:discord.Interaction, error:app_commands.AppCommandError):
     if isinstance(error, app_commands.CommandOnCooldown):
-        await interacton.response.send_message(f"This command is on cooldown, please retry in {round(error.retry_after, 2)} seconds. (when this message goes away)", ephemeral = True, delete_after=error.retry_after)
+        try:
+            await interacton.response.send_message(f"This command is on cooldown, please retry in {round(error.retry_after, 2)} seconds. (when this message goes away)", ephemeral = True, delete_after=error.retry_after)
+        except:
+            pass
     else: raise error
         
 @bot.tree.command(name = "ping", description='Returns latency')
 async def ping(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
-    await interaction.response.send_message(f"Pong! {round(bot.latency * 1000)}ms", ephemeral = True)
-
+    try:
+        await interaction.response.send_message(f"Pong! {round(bot.latency * 1000)}ms", ephemeral = True)
+    except:
+        pass
 @bot.tree.command(name = "hello", description='Says hello')
 async def hello(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
-    await interaction.response.send_message(f"Hey {interaction.user.mention}!", ephemeral = True)
-
+    try:
+        await interaction.response.send_message(f"Hey {interaction.user.mention}!", ephemeral = True)
+    except:
+        pass
 @bot.tree.command(name = "say", description='Repeats what you say')
 @app_commands.describe(thing_to_say = "what should i say")
 @app_commands.describe(secret = "is this a secret?")
 async def say(interaction: discord.Interaction, thing_to_say: str, secret: bool = True):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}\nthing_to_say: {thing_to_say} - secret: {secret}')
     if not secret:
-        await interaction.response.send_message(f"{interaction.user.mention} said: {thing_to_say}", ephemeral = True, delete_after=5)
+        try:
+            await interaction.response.send_message(f"{interaction.user.mention} said: {thing_to_say}", ephemeral = True, delete_after=5)
+        except:
+            pass
     else:
-        await interaction.response.send_message(f"ok", ephemeral = True, delete_after=0)
+        try:
+            await interaction.response.send_message(f"ok", ephemeral = True, delete_after=0)
+        except:
+            pass
         await interaction.channel.send(f"{thing_to_say}")
-    
+
 @bot.tree.command(name = "tierlist", description='Starts voting for the Teir List')
 @app_commands.describe(timer = "is this timed? (true: timer, false: type command to end)")
 @app_commands.describe(voting_time_seconds = "How long are we waiting for votes to come in? (seconds)")
 async def tierlist(interaction: discord.Interaction, timer: bool = False, voting_time_seconds: int = 5):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}\ntimer: {timer} - voting_time_seconds: {voting_time_seconds}')
     if not (interaction.user.guild_permissions.administrator or interaction.user.id == myID):
-        await interaction.response.send_message(f"You don't have permission to do that {interaction.user.mention}", ephemeral = True, delete_after=5)
+        try:
+            await interaction.response.send_message(f"You don't have permission to do that {interaction.user.mention}", ephemeral = True, delete_after=5)
+        except:
+            pass
         return
     
-    db = TinyDB('tierlist.json')
+    db = TinyDB('databases/tierlist.json')
     User = Query()
     res = db.search(User.channel == interaction.channel.id)
     if len(res) >= 1:
-        await interaction.response.send_message(f"already one tierlist ongoing, try /endtierlist", ephemeral = True, delete_after=7)
+        try:
+            await interaction.response.send_message(f"already one tierlist ongoing, try /endtierlist", ephemeral = True, delete_after=7)
+        except:
+            pass
         return
-    
-    await interaction.response.send_message(f"starting tierlist", ephemeral = True, delete_after=5)
-    
+    try:
+        await interaction.response.send_message(f"starting tierlist", ephemeral = True, delete_after=5)
+    except:
+        pass
     if not timer: db.insert({'channel': interaction.channel.id, 'vote_msg_list': interaction.channel.id, 'memberids': interaction.channel.id})
     charliealtid = 704872368572465163
     botid = 1186185707258134560
@@ -140,20 +160,28 @@ async def tierlist(interaction: discord.Interaction, timer: bool = False, voting
 async def endtierlist(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     if not (interaction.user.guild_permissions.administrator or interaction.user.id == myID):
-        await interaction.response.send_message(f"You don't have permission to do that {interaction.message.author.mention}", ephemeral = True, delete_after=5)
+        try:
+            await interaction.response.send_message(f"You don't have permission to do that {interaction.message.author.mention}", ephemeral = True, delete_after=5)
+        except:
+            pass
         return
     
-    db = TinyDB('tierlist.json')
+    db = TinyDB('databases/tierlist.json')
     User = Query()
     res = db.search(User.channel == interaction.channel.id)
     
     # Check if there is no query in the database
     if len(res) == 0 or (res[0]['channel'] == res[0]['vote_msg_list'] and res[0]['channel'] == res[0]['memberids']):
-        await interaction.response.send_message(f"no tierlist to end, try /tierlist", ephemeral = True, delete_after=7)
+        try:
+            await interaction.response.send_message(f"no tierlist to end, try /tierlist", ephemeral = True, delete_after=7)
+        except:
+            pass
         return
     
-    await interaction.response.send_message(f"ending tierlist", ephemeral = True, delete_after=5)
-    
+    try:
+        await interaction.response.send_message(f"ending tierlist", ephemeral = True, delete_after=5)
+    except:
+        pass
     res = res[0]
     vote_msg_list = res['vote_msg_list']
     memberids = [await bot.fetch_user(x) for x in res['memberids']] #gets user objects from ids
@@ -185,64 +213,91 @@ async def play(interaction: discord.Interaction, query: str, music: bool = True,
         disable_enableQueue(interaction.guild.id, False)
     
     #checks if the bot is busy downloading a song
-    queue = TinyDB('queue.json')
+    queue = TinyDB('databases/queue.json')
     User = Query()
     res = queue.search(User.server == interaction.guild.id)
     if res[0]['disabled']:
-        await interaction.response.send_message(f"A song is already downloading, songs can not be added to the queue at this time", ephemeral = True, delete_after=5)
+        try:
+            await interaction.response.send_message(f"A song is already downloading, songs can not be added to the queue at this time", ephemeral = True, delete_after=5)
+        except:
+            pass
         return
     
     #checks if the user is in a vc
     uservoice = interaction.user.voice
     if uservoice is None:
-        await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=5)
+        try:
+            await interaction.response.send_message(f"you're not in a voice channel retard", ephemeral = True, delete_after=5)
+        except:
+            pass
         return
     
     #runs the command for a youtube link
     if "https://www.youtube.com/" in query or "https://youtube.com/" in query:
-        await queryLink(query, interaction, uservoice, voice)
+        await queryYouTubeLink(query, interaction, uservoice, voice)
         return
     
     #runs the command for a spotify link
     if  "https://open.spotify.com/track/" in query or "https://open.spotify.com/playlist/" in query:
-        await interaction.response.send_message(f'Spotify links are being worked on', ephemeral = True, delete_after=5)
+        try:
+            await interaction.response.send_message(f'Spotify links are being worked on', ephemeral = True, delete_after=5)
+        except:
+            pass
+        # await querySpotifyLink(query, interaction, uservoice, voice)
         return
     
     #youtube music search
-    if music == True : 
+    if music: 
         yt = YTMusic()
         s = yt.search(query,filter="songs",limit=10)
         videoObjList = [YoutubeSearchCustom(i) for i in s]
+        videoObjList2 = Search(query).results[:10]
     else: 
         videoObjList = Search(query).results[:10]
+        yt = YTMusic()
+        s = yt.search(query,filter="songs",limit=10)
+        videoObjList2 = [YoutubeSearchCustom(i) for i in s]
 
     # debug(s,"s.json")
-    if (len(videoObjList) == 0):
-        await interaction.response.send_message(f"no results found", ephemeral = True, delete_after=5)
+    if (len(videoObjList) == 0 or len(videoObjList2) == 0):
+        try:
+            await interaction.response.send_message(f"no results found", ephemeral = True, delete_after=5)
+        except:
+            pass
         return
     
     #making too many unnessary calls to youtube api, easy way to get rate limited
     # videoObjList = [YoutubeSearchCustom(i) for i in s]
-
     
     if im_feeling_lucky:
         videoObj = videoObjList[0]
         #live video
         if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None:
-            await interaction.response.send_message(f'You can not play live videos on the bot, Try Again', ephemeral=True, delete_after=7)
+            try:
+                await interaction.response.send_message(f'You can not play live videos on the bot, Try Again', ephemeral=True, delete_after=7)
+            except:
+                pass
             return
         
         #video too long
         if videoObj.length_seconds > MAXVIDEOLENGTH:
-            await interaction.response.send_message(f"Video is too long, go fuck yourself.", ephemeral = True, delete_after=7)
+            try:
+                await interaction.response.send_message(f"Video is too long, go fuck yourself.", ephemeral = True, delete_after=7)
+            except:
+                pass
             return
+        
         await playVideoObj(videoObj,interaction,uservoice,voice)
         return
-    
-    await interaction.response.send_message(f"Searching!", ephemeral = True, delete_after=3)
+    try:
+        await interaction.response.send_message(f"Searching!", ephemeral = True, delete_after=3)
+    except:
+        pass
     #build the selection and embed
     selectionmessage = [(" "if k!=9 else "") + f"{k+1} : {v.title}\n" for k,v in enumerate(videoObjList[0:10])]
     select = Select(options = [discord.SelectOption(label = f'{k+1} : {v.title}'[:99] if len(f'{k+1}: {v.title}') > 99 else f'{k+1} : {v.title}', description = f'{v.length} - {v.viewCountText}', value=k) for k,v in enumerate(videoObjList[0:10])])
+    selectionmessage2 = [(" "if k!=9 else "") + f"{k+1} : {v.title}\n" for k,v in enumerate(videoObjList2[0:10])]
+    select2 = Select(options = [discord.SelectOption(label = f'{k+1} : {v.title}'[:99] if len(f'{k+1}: {v.title}') > 99 else f'{k+1} : {v.title}', description = f'{v.length} - {v.viewCountText}', value=k) for k,v in enumerate(videoObjList2[0:10])])
     
     #callback for when an option is chosen
     async def my_mycallback(ints:Interaction[Client]):
@@ -256,15 +311,108 @@ async def play(interaction: discord.Interaction, query: str, music: bool = True,
         await playVideoObj(videoObj,ints,uservoice,voice,newint)
         return
     
-    select.callback = my_mycallback
+    #callback for when an option is chosen but for videoObjList2
+    async def my_mycallback2(ints:Interaction[Client]):
+        #user did not search this
+        if ints.user.id != interaction.user.id: 
+            try:
+                await ints.response.send_message(f"You cant select this video, you did not search it", ephemeral = True, delete_after=7)
+            except:
+                pass
+            return
+        
+        #live video
+        videoObj2 = videoObjList2[int(select2.values[0])]
+        await playVideoObj(videoObj2,ints,uservoice,voice,newint)
+        return
     
-    #sends the selection message
+    #button callback for switching to youtube
+    async def buttoncallback(ints:Interaction[Client]):
+        try:
+            await ints.response.send_message(f"Switching to YouTube", ephemeral = True, delete_after=3)
+        except:
+            pass
+        #user did not search this
+        if ints.user.id != interaction.user.id: 
+            try:
+                await ints.response.send_message(f"You cant do this, you did not search this song", ephemeral = True, delete_after=7)
+            except:
+                pass
+            return
+        
+        await newint.edit(content=f'{searchstring2}```'+''.join(map(str, selectionmessage2))+'```',view=view2)
+    
+    #button callback for switching to youtube music 
+    async def buttoncallback2(ints:Interaction[Client]):
+        try:
+            await ints.response.send_message(f"Switching to YouTubeMusic", ephemeral = True, delete_after=3)
+        except:
+            pass
+        #user did not search this
+        if ints.user.id != interaction.user.id: 
+            try:
+                await ints.response.send_message(f"You cant do this, you did not search this song", ephemeral = True, delete_after=7)
+            except:
+                pass
+            return
+        
+        await newint.edit(content=f'{searchstring}```'+''.join(map(str, selectionmessage))+'```',view=view)
+    
+    #button callback for switching to youtube music 
+    async def deletebuttoncallback(ints:Interaction[Client]):
+        try:
+            await ints.message.delete()
+        except:
+            pass
+        
+            
+    #removes the selection message
+    async def remove():
+        try:
+            await newint.delete()
+        except:
+            pass
+        return
+    
+    #adds the callback to the selection
+    select.callback = my_mycallback
+    select2.callback = my_mycallback2
+    #creates both views
     view = View()
+    view2 = View()
+    #timeout functions
+    view.on_timeout = remove
+    view2.on_timeout = remove
+    #adds the selection to the view
     view.add_item(select)
+    view2.add_item(select2)
+    
+    #creates buttons and adds their callbacks
+    button = discord.ui.Button(label='Switch To YouTube', style=discord.ButtonStyle.red, custom_id="Switch1")
+    button.callback = buttoncallback
+    button2 = discord.ui.Button(label='Switch To YouTubeMusic', style=discord.ButtonStyle.green, custom_id="Switch2")
+    button2.callback = buttoncallback2
+    deletebutton = discord.ui.Button(label='Delete', style=discord.ButtonStyle.red, custom_id="Delete")
+    deletebutton.callback = deletebuttoncallback
+    
+    #adds the buttons to the view
+    view.add_item(button)
+    view.add_item(deletebutton)
+    view2.add_item(button2)
+    view2.add_item(deletebutton)
+    
     # davidsid = 382271649724104705
     #if interaction.user.id != davidsid else f'{interaction.user.mention} Searched: "gay furry porn"\n'
-    searchstring = f'{interaction.user.mention} Searched: "*{query}*" on {"YouTubeMusic" if music else "YouTube"}\n' 
-    newint = await interaction.channel.send(f'{searchstring}```'+''.join(map(str, selectionmessage))+'```',view=view)
+    
+    #creates the search string messsage
+    searchstring = f'{interaction.user.mention} Searched: "*{query}*" on YouTubeMusic\n' 
+    searchstring2 = f'{interaction.user.mention} Searched: "*{query}*" on YouTube\n' 
+
+    #sends the message depending on the starting view
+    if music:
+        newint = await interaction.channel.send(f'{searchstring}```'+''.join(map(str, selectionmessage))+'```',view=view)
+    else:
+        newint = await interaction.channel.send(f'{searchstring2}```'+''.join(map(str, selectionmessage2))+'```',view=view2)
 
 @bot.tree.command(name = "queue", description='Views the queue')
 @app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
@@ -276,7 +424,10 @@ async def queue(interaction: discord.Interaction):
 
     #queue is empty
     if len(res[0]['queue']) == 0:
-        await interaction.response.send_message(f"no queue", ephemeral = True, delete_after=3)
+        try:
+            await interaction.response.send_message(f"no queue", ephemeral = True, delete_after=3)
+        except:
+            pass
         return
     
     await interaction.response.send_message(f"Searching queue:", ephemeral = True, delete_after=3)
@@ -288,8 +439,14 @@ async def queue(interaction: discord.Interaction):
     
     #creates the embed and view
     qembed = createQueueEmbed(interaction,res,1,total_pages)
+    async def remove():
+        await queueembed.delete()
+        return
+    
     queue_view = queueView(qembed,res,total_pages)
+    queue_view.on_timeout = remove
     queueembed = await interaction.channel.send(embed=qembed,view=queue_view)
     queue_view.queueembed = queueembed
-
+        
+        
 bot.run(TOKEN)
