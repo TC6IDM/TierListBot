@@ -234,7 +234,7 @@ async def play(interaction: discord.Interaction, query: str, music: bool = True,
         return
     
     #runs the command for a youtube link
-    if "https://www.youtube.com/" in query or "https://youtube.com/" in query:
+    if "https://www.youtube.com/" in query or "https://youtube.com/" in query or "https://music.youtube.com/" in query or "https://music.youtube.com/" in query:
         await queryYouTubeLink(query, interaction, uservoice, voice)
         return
     

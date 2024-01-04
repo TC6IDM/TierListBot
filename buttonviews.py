@@ -166,8 +166,10 @@ class SimpleView(discord.ui.View):
         The Play button, plays the currently playing song
         '''
         print(f'Play button pressed by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
-        # await interaction.response.send_message('Playing', ephemeral=True, delete_after=1)
-        
+        try:
+            await interaction.response.send_message('Pausing', ephemeral=True, delete_after=1)
+        except:
+            pass
         #if not playing, play
         if self.vc.is_paused(): 
             self.vc.resume()

@@ -10,7 +10,7 @@ import shutil
 from PIL import Image, ImageDraw, ImageFont
 import io
 from bs4 import BeautifulSoup
-from discord import Client, File, Interaction, Message, TextChannel, VoiceClient, VoiceProtocol, VoiceState
+from discord import Client, File, Interaction, Message, Spotify, TextChannel, VoiceClient, VoiceProtocol, VoiceState
 import discord
 import jsonpickle
 import requests
@@ -596,92 +596,8 @@ async def querySpotifyLink(query:str, interaction: Interaction[Client], uservoic
         await playVideoObj(videoObj, interaction, uservoice, voice)
         return
     
-    elif 'playlist' in query:
-        
-        try:
-            spotifyPlaylist = session.playlist(query)
-            # debug(spotifyPlaylist, 'spotifyplaylist.json')
-        except:
-            await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
-            return
-        
-        if len(spotifyPlaylist) == 0:
-            try:
-                await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
-            except:
-                pass
-            return
-        
-        # Playlist is real, send out default message and stop people from adding more songs to the queue
-        await interaction.response.send_message(f'analysing playlist', ephemeral = True, delete_after=5)
-        waitingmessage = await interaction.channel.send(f'analysing playlist from {interaction.user.mention} - {query} (?/?)')
-        
-        
-        #disables people adding to the queue while the playlist is being downloaded
-        disable_enableQueue(interaction.guild.id, True)
-        # debug(res)
-        endtext = ""
-        
-        #enumerates through the playlist object
-        while spotifyPlaylist['tracks']['next']:
-            results = session.next(spotifyPlaylist['tracks'])
-            spotifyPlaylist['tracks']['next']=results['next']
-            spotifyPlaylist['tracks']['previous']=results['previous']
-            spotifyPlaylist['tracks']['items']+=results['items']
-            
-        for v,track in enumerate(spotifyPlaylist['tracks']['items']):
-            
-            #edits the message to show where in the playlist we are at
-            await waitingmessage.edit(content=f'analysing playlist from {interaction.user.mention} - {query} ({v+1}/{len(spotifyPlaylist["tracks"]["items"])})\n{endtext}')
-            
-            youtubesearchquery = f'{track["track"]["name"]} {track["track"]["artists"][0]["name"]}'
-            print(youtubesearchquery)
-            yt = YTMusic()
-            s = yt.search(youtubesearchquery,filter="songs")
-            videoObjList = [YoutubeSearchCustom(i) for i in s]
-            # videoObj = Search(youtubesearchquery).results
-            if len(videoObjList) == 0: 
-                endtext += f'song {v+1} - {youtubesearchquery} was not added to the queue (Can not find an appropiate video for this song link)\n'
-                continue
-            
-            videoObj = findRightVideo(videoObjList, track["track"])
-            
-            if videoObj is None:
-                videoObj = videoObjList[0]
-                
-            # videoObj = YouTube(newurl)
-            if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None: 
-                endtext += f'song {v+1} - {videoObj.title} was not added to the queue (possibly live video)\n'
-                continue
-            if videoObj.length_seconds > MAXVIDEOLENGTH: 
-                endtext += f'song {v+1} - {videoObj.title} was not added to the queue (video too long)\n'
-                continue
-            
-            #adds the video to the queue and downloads it
-            output = addtoQueue(interaction,videoObj)
-            download(output,videoObj.watch_url)
-    
-        #downloading is done so the user can add back to the queue now
-        disable_enableQueue(interaction.guild.id, False)
-        
-        #delete the message and start the queue when its done downloading
-        await waitingmessage.delete()
-        if voice is None: await startqueue(interaction,uservoice)
-        return
-    
-    elif 'album' in query:
-        try:
-            await interaction.response.send_message(f"spotify albums are being worked on", ephemeral = True, delete_after=5)
-        except:
-            pass
-        return
-
-    elif 'artist' in query:
-        try:
-            await interaction.response.send_message(f"spotify artists are being worked on", ephemeral = True, delete_after=5)
-        except:
-            pass
-        return
+    elif 'playlist' in query or 'album' in query or 'artist' in query:
+        await spotifyLongPlayer(session, query, interaction, uservoice, voice)
 
     else:
         try:
@@ -689,6 +605,7 @@ async def querySpotifyLink(query:str, interaction: Interaction[Client], uservoic
         except:
             pass
         return
+    
 def findRightVideo(videoObjList: list[YoutubeSearchCustom], spotifyTrack:dict) -> YoutubeSearchCustom:
 
     for i in videoObjList:
@@ -697,6 +614,7 @@ def findRightVideo(videoObjList: list[YoutubeSearchCustom], spotifyTrack:dict) -
             i.value += 1
         if i.obj['title'] == spotifyTrack['name']:
             i.value += 1
+        #'album' in spotifyTrack.keys() and 
         if i.obj['album']['name'] == spotifyTrack['album']['name']:
             i.value += 1
         if abs(i.obj['duration_seconds'] - spotifyTrack['duration_ms'] / 1000) <= 5:
@@ -715,3 +633,174 @@ def findRightVideo(videoObjList: list[YoutubeSearchCustom], spotifyTrack:dict) -
     #i.obj['artists'][0]['name'] against spotifyTrack['artists'][0]['name']
     #i.obj['isExplicit'] against spotifyTrack['explicit']
     return videoObjList[0] if len(videoObjList) != 0 else None
+
+
+async def spotifyLongPlayer(session:spotipy.Spotify, query:str, interaction: Interaction[Client], uservoice: VoiceState, voice: VoiceProtocol) -> None:
+    if 'playlist' in query:
+        try:
+            await interaction.response.send_message(f'analysing playlist', ephemeral = True, delete_after=5)
+        except:
+            pass
+        # Playlist is real, send out default message and stop people from adding more songs to the queue
+        waitingmessage = await interaction.channel.send(f'analysing playlist from {interaction.user.mention} - {query} (?/?)')
+        #disables people adding to the queue while the playlist is being downloaded
+        disable_enableQueue(interaction.guild.id, True)
+            
+        spotifyList = session.playlist_tracks(query)
+        debug(spotifyList, 'spotifyListPLAYLIST.json')
+        spotifyListdata = session.playlist(query)
+        debug(spotifyListdata, 'spotifyListPLAYLISTDATA.json')
+        spotifyListdata2 = session.playlist_items(query)
+        debug(spotifyListdata2, 'spotifyListPLAYLISTITEMSDATA.json')
+        keyword = 'playlist'
+            
+    elif 'album' in query:
+        try:
+            await interaction.response.send_message(f'analysing album', ephemeral = True, delete_after=5)
+        except:
+            pass
+        # album is real, send out default message and stop people from adding more songs to the queue
+        waitingmessage = await interaction.channel.send(f'analysing album from {interaction.user.mention} - {query} (?/?)')
+        #disables people adding to the queue while the album is being downloaded
+        disable_enableQueue(interaction.guild.id, True)
+            
+        spotifyList = session.album_tracks(query)
+        debug(spotifyList, 'spotifyListALBUM.json')
+        spotifyListdata = session.album(query)
+        debug(spotifyListdata, 'spotifyListALBUMDATA.json')
+        for i in spotifyList['items']:
+            i['album'] = {}
+            i['album']['name'] = spotifyListdata['name']
+        keyword = 'album'
+            
+    elif 'artist' in query:
+        try:
+            await interaction.response.send_message(f'analysing artist - only top songs appear now', ephemeral = True, delete_after=5)
+        except:
+            pass
+        waitingmessage = await interaction.channel.send(f'analysing album from {interaction.user.mention} - {query} (?/?)')
+        
+        disable_enableQueue(interaction.guild.id, True)
+            
+        spotifyList = session.artist_top_tracks(query)
+        debug(spotifyList, 'spotifyListARTISTTOPTRACKSDATA.json')
+        # spotifyListdata = session.playlist(query)
+        # debug(spotifyListdata, 'spotifyListPLAYLISTDATA.json')
+        # spotifyListdata2 = session.playlist_items(query)
+        # debug(spotifyListdata2, 'spotifyListPLAYLISTITEMSDATA.json')
+        spotifyList['next'] = None
+        spotifyList['items'] = spotifyList['tracks']
+        keyword = 'artist'
+        
+        # # artist is real, send out default message and stop people from adding more songs to the queue
+        # waitingmessage = await interaction.channel.send(f'analysing artist from {interaction.user.mention} - {query} (?/?)')
+        # #disables people adding to the queue while the artist is being downloaded
+        # disable_enableQueue(interaction.guild.id, True)
+            
+        # spotifyListart = session.artist_albums(query)
+        # spotifyListdata = session.artist(query)
+        # # debug(spotifyListdata, 'spotifyListARTISTDATA.json')
+        # spotifyListdata2 = session.artist_top_tracks(query)
+        # # debug(spotifyListdata2, 'spotifyListARTISTTOPTRACKSDATA.json')
+        # keyword = 'artist'
+        # while spotifyListart['next']:
+        #     results = session.next(spotifyListart)
+        #     spotifyListart['next']=results['next']
+        #     spotifyListart['previous']=results['previous']
+        #     # spotifyList.extend(results['items'])
+        #     spotifyListart['items']+=results['items']
+            
+        # spotifyList = {'items': []}
+            
+        # for album in spotifyListart['items']:
+        #     print(spotifyListalbdata['name'])
+        #     query = album['external_urls']['spotify']
+        #     spotifyListalb = session.album_tracks(query)
+        #     # debug(spotifyListalb, 'spotifyListALBUM.json')
+        #     spotifyListalbdata = session.album(query)
+        #     # debug(spotifyListalbdata, 'spotifyListALBUMDATA.json')
+                
+        #     while spotifyListalb['next']:
+        #         results = session.next(spotifyListalb)
+        #         spotifyListalb['next']=results['next']
+        #         spotifyListalb['previous']=results['previous']
+        #         # spotifyListalb.extend(results['items'])
+        #         spotifyListalb['items']+=results['items']
+                    
+        #     for i in spotifyListalb['items']:
+        #         i['album'] = {}
+        #         i['album']['name'] = spotifyListalbdata['name']
+                
+        #     spotifyList['items']+=spotifyListalb['items']
+                
+                
+            
+        # debug(spotifyList, 'spotifyListARTIST.json')
+        # # debug(session.artist_albums(query), 'spotifyartistalbums.json')
+    else:
+        try:
+            await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
+        except:
+            pass
+        return
+        # debug(spotifyList, 'spotifyList.json')
+        
+    if len(spotifyList) == 0:
+        try:
+            await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
+        except:
+            pass
+        return
+    
+    print(interaction.guild.id)
+    
+    # debug(res)
+    endtext = ""
+        
+    #enumerates through the playlist object
+    while spotifyList['next']:
+        results = session.next(spotifyList)
+        spotifyList['next']=results['next']
+        spotifyList['previous']=results['previous']
+        # spotifyList.extend(results['items'])
+        spotifyList['items']+=results['items']
+            
+    for v,track in enumerate(spotifyList['items']):
+            
+        #edits the message to show where in the playlist we are at
+        await waitingmessage.edit(content=f'analysing playlist from {interaction.user.mention} - {query} ({v+1}/{len(spotifyList["items"])})\n{endtext}')
+            
+        youtubesearchquery = f'{track["track"]["name"] if keyword == "playlist" else track["name"]} {track["track"]["artists"][0]["name"] if keyword == "playlist" else track["artists"][0]["name"]}'
+        print(youtubesearchquery)
+        yt = YTMusic()
+        s = yt.search(youtubesearchquery,filter="songs")
+        videoObjList = [YoutubeSearchCustom(i) for i in s]
+        # videoObj = Search(youtubesearchquery).results
+        if len(videoObjList) == 0: 
+            endtext += f'song {v+1} - {youtubesearchquery} was not added to the queue (Can not find an appropiate video for this song link)\n'
+            continue
+            
+        videoObj = findRightVideo(videoObjList, track["track"] if keyword == 'playlist' else track)
+            
+        if videoObj is None:
+            videoObj = videoObjList[0]
+                
+        # videoObj = YouTube(newurl)
+        if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None: 
+            endtext += f'song {v+1} - {videoObj.title} was not added to the queue (possibly live video)\n'
+            continue
+        if videoObj.length_seconds > MAXVIDEOLENGTH: 
+            endtext += f'song {v+1} - {videoObj.title} was not added to the queue (video too long)\n'
+            continue
+            
+            #adds the video to the queue and downloads it
+        output = addtoQueue(interaction,videoObj)
+        download(output,videoObj.watch_url)
+    
+        #downloading is done so the user can add back to the queue now
+    disable_enableQueue(interaction.guild.id, False)
+        
+    #delete the message and start the queue when its done downloading
+    await waitingmessage.delete()
+    if voice is None: await startqueue(interaction,uservoice)
+    return
