@@ -239,7 +239,7 @@ async def play(interaction: discord.Interaction, query: str, music: bool = True,
         return
     
     #runs the command for a spotify link
-    if  "https://open.spotify.com/track/" in query or "https://open.spotify.com/playlist/" in query:
+    if  "https://open.spotify.com/track/" in query or "https://open.spotify.com/playlist/" in query or "https://open.spotify.com/album/" in query or "https://open.spotify.com/artist/" in query:
         # try:
         #     await interaction.response.send_message(f'Spotify links are being worked on', ephemeral = True, delete_after=5)
         # except:

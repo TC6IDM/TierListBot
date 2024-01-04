@@ -596,78 +596,99 @@ async def querySpotifyLink(query:str, interaction: Interaction[Client], uservoic
         await playVideoObj(videoObj, interaction, uservoice, voice)
         return
     
-    
-    if 'playlist' not in query:
+    elif 'playlist' in query:
+        
         try:
-            await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
+            spotifyPlaylist = session.playlist(query)
+            # debug(spotifyPlaylist, 'spotifyplaylist.json')
         except:
-            pass
-        return
-    
-    try:
-        spotifyPlaylist = session.playlist(query)
-    except:
-        await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
-        return
-    
-    if len(spotifyPlaylist) == 0:
-        try:
             await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
-        except:
-            pass
-        return
-    
-    # Playlist is real, send out default message and stop people from adding more songs to the queue
-    await interaction.response.send_message(f'analysing playlist', ephemeral = True, delete_after=5)
-    waitingmessage = await interaction.channel.send(f'analysing playlist from {interaction.user.mention} - {query} (?/?)')
-    
-    
-    #disables people adding to the queue while the playlist is being downloaded
-    disable_enableQueue(interaction.guild.id, True)
-    # debug(res)
-    endtext = ""
-    #enumerates through the playlist object
-    for v,track in enumerate(spotifyPlaylist['tracks']['items']):
+            return
         
-        #edits the message to show where in the playlist we are at
-        await waitingmessage.edit(content=f'analysing playlist from {interaction.user.mention} - {query} ({v+1}/{len(spotifyPlaylist["tracks"]["items"])})\n{endtext}')
+        if len(spotifyPlaylist) == 0:
+            try:
+                await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
+            except:
+                pass
+            return
         
-        youtubesearchquery = f'{track["track"]["name"]} {track["track"]["artists"][0]["name"]}'
-        print(youtubesearchquery)
-        yt = YTMusic()
-        s = yt.search(youtubesearchquery,filter="songs")
-        videoObjList = [YoutubeSearchCustom(i) for i in s]
-        # videoObj = Search(youtubesearchquery).results
-        if len(videoObjList) == 0: 
-            endtext += f'song {v+1} - {youtubesearchquery} was not added to the queue (Can not find an appropiate video for this song link)\n'
-            continue
+        # Playlist is real, send out default message and stop people from adding more songs to the queue
+        await interaction.response.send_message(f'analysing playlist', ephemeral = True, delete_after=5)
+        waitingmessage = await interaction.channel.send(f'analysing playlist from {interaction.user.mention} - {query} (?/?)')
         
-        videoObj = findRightVideo(videoObjList, track["track"])
         
-        if videoObj is None:
-            videoObj = videoObjList[0]
+        #disables people adding to the queue while the playlist is being downloaded
+        disable_enableQueue(interaction.guild.id, True)
+        # debug(res)
+        endtext = ""
+        
+        #enumerates through the playlist object
+        while spotifyPlaylist['tracks']['next']:
+            results = session.next(spotifyPlaylist['tracks'])
+            spotifyPlaylist['tracks']['next']=results['next']
+            spotifyPlaylist['tracks']['previous']=results['previous']
+            spotifyPlaylist['tracks']['items']+=results['items']
             
-        # videoObj = YouTube(newurl)
-        if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None: 
-            endtext += f'song {v+1} - {videoObj.title} was not added to the queue (possibly live video)\n'
-            continue
-        if videoObj.length_seconds > MAXVIDEOLENGTH: 
-            endtext += f'song {v+1} - {videoObj.title} was not added to the queue (video too long)\n'
-            continue
+        for v,track in enumerate(spotifyPlaylist['tracks']['items']):
+            
+            #edits the message to show where in the playlist we are at
+            await waitingmessage.edit(content=f'analysing playlist from {interaction.user.mention} - {query} ({v+1}/{len(spotifyPlaylist["tracks"]["items"])})\n{endtext}')
+            
+            youtubesearchquery = f'{track["track"]["name"]} {track["track"]["artists"][0]["name"]}'
+            print(youtubesearchquery)
+            yt = YTMusic()
+            s = yt.search(youtubesearchquery,filter="songs")
+            videoObjList = [YoutubeSearchCustom(i) for i in s]
+            # videoObj = Search(youtubesearchquery).results
+            if len(videoObjList) == 0: 
+                endtext += f'song {v+1} - {youtubesearchquery} was not added to the queue (Can not find an appropiate video for this song link)\n'
+                continue
+            
+            videoObj = findRightVideo(videoObjList, track["track"])
+            
+            if videoObj is None:
+                videoObj = videoObjList[0]
+                
+            # videoObj = YouTube(newurl)
+            if videoObj.length is None or videoObj.vidlength is None or videoObj.length_seconds is None: 
+                endtext += f'song {v+1} - {videoObj.title} was not added to the queue (possibly live video)\n'
+                continue
+            if videoObj.length_seconds > MAXVIDEOLENGTH: 
+                endtext += f'song {v+1} - {videoObj.title} was not added to the queue (video too long)\n'
+                continue
+            
+            #adds the video to the queue and downloads it
+            output = addtoQueue(interaction,videoObj)
+            download(output,videoObj.watch_url)
+    
+        #downloading is done so the user can add back to the queue now
+        disable_enableQueue(interaction.guild.id, False)
         
-        #adds the video to the queue and downloads it
-        output = addtoQueue(interaction,videoObj)
-        download(output,videoObj.watch_url)
+        #delete the message and start the queue when its done downloading
+        await waitingmessage.delete()
+        if voice is None: await startqueue(interaction,uservoice)
+        return
     
-    #downloading is done so the user can add back to the queue now
-    disable_enableQueue(interaction.guild.id, False)
-    
-    #delete the message and start the queue when its done downloading
-    await waitingmessage.delete()
-    if voice is None: await startqueue(interaction,uservoice)
-    return
+    elif 'album' in query:
+        try:
+            await interaction.response.send_message(f"spotify albums are being worked on", ephemeral = True, delete_after=5)
+        except:
+            pass
+        return
 
+    elif 'artist' in query:
+        try:
+            await interaction.response.send_message(f"spotify artists are being worked on", ephemeral = True, delete_after=5)
+        except:
+            pass
+        return
 
+    else:
+        try:
+            await interaction.response.send_message(f"invalid spotify link", ephemeral = True, delete_after=5)
+        except:
+            pass
+        return
 def findRightVideo(videoObjList: list[YoutubeSearchCustom], spotifyTrack:dict) -> YoutubeSearchCustom:
 
     for i in videoObjList:
