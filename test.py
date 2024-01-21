@@ -73,15 +73,18 @@ import os
 import shutil
 import datetime
 
-# now = str(datetime.datetime.now())[:19]
-# now = now.replace(":","_")
-file_names = [fn for fn in os.listdir("C:\\Users\\Owner\\Desktop\\lethal company mods\\LethalAudioFiles2\\Lethal Company\\ExportedProject\\Assets\\AudioClip")
-              if (fn.endswith(".wav") or fn.endswith(".ogg"))]
-print(file_names)
-# os.listdir()
-src_dir="D:\\Downloads\\THUD.wav"
-for i,v in enumerate(file_names):
-    dst_dir=f'C:\\Users\\Owner\\Desktop\\lethal company mods\\VineThud\\BepInEx\\plugins\\CustomSounds\\VineThud\\{v.replace(".ogg",".wav")}'
-    print(i+1,v)
-    shutil.copy(src_dir,dst_dir)
+# # now = str(datetime.datetime.now())[:19]
+# # now = now.replace(":","_")
+# file_names = [fn for fn in os.listdir("C:\\Users\\Owner\\Desktop\\lethal company mods\\LethalAudioFiles2\\Lethal Company\\ExportedProject\\Assets\\AudioClip")
+#               if (fn.endswith(".wav") or fn.endswith(".ogg"))]
+# print(file_names)
+# # os.listdir()
+# src_dir="D:\\Downloads\\THUD.wav"
+# for i,v in enumerate(file_names):
+#     dst_dir=f'C:\\Users\\Owner\\Desktop\\lethal company mods\\VineThud\\BepInEx\\plugins\\CustomSounds\\VineThud\\{v.replace(".ogg",".wav")}'
+#     print(i+1,v)
+#     shutil.copy(src_dir,dst_dir)
 
+dict1 = {"a":"1","b":"2","c":"3"}
+dict2 = {"a":"1"}
+print(dict1+dict2)

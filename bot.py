@@ -2,6 +2,7 @@
 #Getting rate limited by youtube? refresh cookie file
 import asyncio
 import shutil
+from typing import Literal
 import discord
 import os
 from dotenv import load_dotenv
@@ -75,13 +76,15 @@ async def on_reaction_add(reaction: discord.reaction.Reaction, user: discord.mem
         
     #gets the user that is being voted
     voteduser = await bot.fetch_user(res[0]['memberids'][val])
-    print(f"{user.display_name} voted {reaction.emoji} for {voteduser.display_name} in {reaction.message.guild.name} - {reaction.message.channel.name}")
     
     #user is voting for themselves
     if res[0]['memberids'][val] == user.id:
+        print(f"{user.display_name} voted for themselves in {reaction.message.guild.name} - {reaction.message.channel.name}")
         await reaction.message.remove_reaction(reaction.emoji, user)
         return
     
+    print(f"{user.display_name} voted {reaction.emoji} for {voteduser.display_name} in {reaction.message.guild.name} - {reaction.message.channel.name}")
+
     cache_msg = discord.utils.get(bot.cached_messages, id=reaction.message.id)
     
     #user votes more than once for the same person
@@ -90,18 +93,6 @@ async def on_reaction_add(reaction: discord.reaction.Reaction, user: discord.mem
         if user in [reactuser async for reactuser in r.users()] and not user.bot and str(r) != str(reaction.emoji): #really slow
             await cache_msg.remove_reaction(r.emoji, user)
     
-        
-        
-# @bot.event
-# async def on_voice_state_update(member, before, after):
-#     if member==bot.user:
-#         print("Bot has been Moved")
-#         voice = discord.utils.get(bot.voice_clients, guild=member.guild)
-#         if after is None:
-#             queue = TinyDB('queue.json')
-#             queue.update({'queue': []}, where('server') == member.guild.id)
-#             voice.stop()
-
 @bot.tree.error
 async def on_app_command_error(interacton:discord.Interaction, error:app_commands.AppCommandError):
     if isinstance(error, app_commands.CommandOnCooldown):
@@ -112,22 +103,27 @@ async def on_app_command_error(interacton:discord.Interaction, error:app_command
     else: raise error
         
 @bot.tree.command(name = "ping", description='Returns latency')
+@app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
 async def ping(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     try:
         await interaction.response.send_message(f"Pong! {round(bot.latency * 1000)}ms", ephemeral = True)
     except:
         pass
+
 @bot.tree.command(name = "hello", description='Says hello')
+@app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
 async def hello(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     try:
         await interaction.response.send_message(f"Hey {interaction.user.mention}!", ephemeral = True)
     except:
         pass
+
 @bot.tree.command(name = "say", description='Repeats what you say')
 @app_commands.describe(thing_to_say = "what should i say")
 @app_commands.describe(secret = "is this a secret?")
+@app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
 async def say(interaction: discord.Interaction, thing_to_say: str, secret: bool = True):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}\nthing_to_say: {thing_to_say} - secret: {secret}')
     if not secret:
@@ -145,6 +141,7 @@ async def say(interaction: discord.Interaction, thing_to_say: str, secret: bool 
 @bot.tree.command(name = "tierlist", description='Starts voting for the Teir List')
 @app_commands.describe(timer = "is this timed? (true: timer, false: type command to end)")
 @app_commands.describe(voting_time_seconds = "How long are we waiting for votes to come in? (seconds)")
+@app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
 async def tierlist(interaction: discord.Interaction, timer: bool = False, voting_time_seconds: int = 5):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}\ntimer: {timer} - voting_time_seconds: {voting_time_seconds}')
     if not (interaction.user.guild_permissions.administrator or interaction.user.id == myID):
@@ -208,6 +205,7 @@ async def tierlist(interaction: discord.Interaction, timer: bool = False, voting
         return
         
 @bot.tree.command(name = "endtierlist", description='Ends voting for the Tierlist')
+@app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
 async def endtierlist(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     if not (interaction.user.guild_permissions.administrator or interaction.user.id == myID):
@@ -500,5 +498,73 @@ async def queue(interaction: discord.Interaction):
     queueembed = await interaction.channel.send(embed=qembed,view=queue_view)
     queue_view.queueembed = queueembed
         
+@bot.tree.command(name = "fraudwatch", description='Adds, removes, or views fraudwatch')
+@app_commands.describe(option = "Add, Remove, or View")
+@app_commands.describe(user = "Who to add or remove")
+@app_commands.describe(reason = "Reason for adding")
+@app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id))
+async def fraudwatch(interaction: discord.Interaction, option: Literal['Add', 'Remove', 'View'] = 'View', user: discord.Member = None, reason: str = ""):
+    print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}\noption: {option} - User: {user} - Reason: {reason}')
+    db = TinyDB('databases/fraudwatch.json')
+    User = Query()
+    res = db.search(User.channel == interaction.channel.id)
+    if option == 'View':
+        if len(res) == 0 or len(res[0]['fraudwatch']) == 0:
+            try:
+                await interaction.response.send_message(f"no fraudwatch", ephemeral = True, delete_after=5)
+            except:
+                pass
+            return
+        try:
+            await interaction.response.send_message(f"viewing fraudwatch", ephemeral = True, delete_after=5)
+        except:
+            pass
+        desc = ""
+        for k,v in res[0]['fraudwatch'].items():
+            desc += f'\n<@{k}>: {v}'
+
+        embed=discord.Embed(title="Fraud Watch", description=desc[1:], color=0xff0000)
+        await interaction.channel.send(embed=embed, view = deleteView())
+        return
+    
+    elif option == 'Add':
+        if len(res) == 0:
+            try:
+                await interaction.response.send_message(f"Adding {user.display_name} to fraudwatch", ephemeral = True, delete_after=5)
+            except:
+                pass
+            db.insert({'channel': interaction.channel.id, 'fraudwatch': {user.id : "\n-" +reason}})
+            return
         
+        # print(list(res[0]['fraudwatch'].keys()))
+        
+        if str(user.id) in list(res[0]['fraudwatch'].keys()):
+            try:
+                await interaction.response.send_message(f"Updating {user.display_name}'s fraudwatch reason", ephemeral = True, delete_after=5)
+            except:
+                pass
+            res[0]['fraudwatch'][str(user.id)] = res[0]['fraudwatch'][str(user.id)] + "\n-" + reason
+        else:
+            res[0]['fraudwatch'][str(user.id)] = "\n-" +reason
+            try:
+                await interaction.response.send_message(f"Adding {user.display_name} to fraudwatch", ephemeral = True, delete_after=5)
+            except:
+                pass
+        db.update({'fraudwatch': res[0]['fraudwatch']}, where('channel') == interaction.channel.id)
+        return
+    
+    elif option == 'Remove':
+        if str(user.id) in list(res[0]['fraudwatch'].keys()):
+            res[0]['fraudwatch'].pop(str(user.id))
+            db.update({'fraudwatch': res[0]['fraudwatch']}, where('channel') == interaction.channel.id)
+            try:
+                await interaction.response.send_message(f"{user.display_name} has been taken off fraudwatch", ephemeral = True, delete_after=5)
+            except:
+                pass
+        else:
+            try:
+                await interaction.response.send_message(f"{user.display_name} is not in fraudwatch", ephemeral = True, delete_after=5)
+            except:
+                pass
+            
 bot.run(TOKEN)
