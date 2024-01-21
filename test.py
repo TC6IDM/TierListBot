@@ -49,22 +49,39 @@ from ytdlpUtil import MyLogger, my_hook
 # # yt.add_playlist_items(playlistId, [search_results[0]['videoId']])
 
 # debug(search_results)
-ydl_opts = {
-        'format': 'webm/bestaudio/best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'webm',
-            'preferredquality': '320',#highest quality
-        },{
-            'key': 'FFmpegMetadata',
-            'add_metadata': True,
-        }],
-        'ignoreerrors': True, #ignore errors
-        'outtmpl': 'vids/test.webm', #save songs here .%(ext)s
-        'logger': MyLogger(),
-        'progress_hooks': [my_hook],
-        'cookiefile': COOKIE_FILE, #cookies for downloading age restricted videos
-        }
+# ydl_opts = {
+#         'format': 'webm/bestaudio/best',
+#         'postprocessors': [{
+#             'key': 'FFmpegExtractAudio',
+#             'preferredcodec': 'webm',
+#             'preferredquality': '320',#highest quality
+#         },{
+#             'key': 'FFmpegMetadata',
+#             'add_metadata': True,
+#         }],
+#         'ignoreerrors': True, #ignore errors
+#         'outtmpl': 'vids/test.webm', #save songs here .%(ext)s
+#         'logger': MyLogger(),
+#         'progress_hooks': [my_hook],
+#         'cookiefile': COOKIE_FILE, #cookies for downloading age restricted videos
+#         }
     
-with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-    ydl.download("https://www.youtube.com/watch?v=JqTK_1LReXc&ab_channel=ISAB")
+# with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+#     ydl.download("https://www.youtube.com/watch?v=JqTK_1LReXc&ab_channel=ISAB")
+
+import os
+import shutil
+import datetime
+
+# now = str(datetime.datetime.now())[:19]
+# now = now.replace(":","_")
+file_names = [fn for fn in os.listdir("C:\\Users\\Owner\\Desktop\\lethal company mods\\LethalAudioFiles2\\Lethal Company\\ExportedProject\\Assets\\AudioClip")
+              if (fn.endswith(".wav") or fn.endswith(".ogg"))]
+print(file_names)
+# os.listdir()
+src_dir="D:\\Downloads\\THUD.wav"
+for i,v in enumerate(file_names):
+    dst_dir=f'C:\\Users\\Owner\\Desktop\\lethal company mods\\VineThud\\BepInEx\\plugins\\CustomSounds\\VineThud\\{v.replace(".ogg",".wav")}'
+    print(i+1,v)
+    shutil.copy(src_dir,dst_dir)
+

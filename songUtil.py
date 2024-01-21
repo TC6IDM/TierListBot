@@ -108,7 +108,7 @@ async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceS
     embed.add_field(name="Duration",value=queinfo['duration'],inline=True)
     embed.set_footer(text=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     
-    view = SimpleView(vc,interaction)
+    view = SimpleView(vc,interaction, timeout=None)
     
     #sends the embed
     musicembed = await interaction.channel.send(embed=embed, view=view)

@@ -44,6 +44,53 @@ async def on_ready():
         print(f"Synced {len(synced)} command(s)")
     except Exception as e:
         print(e)
+
+@bot.event
+async def on_reaction_add(reaction: discord.reaction.Reaction, user: discord.member.Member):
+    queue = TinyDB('databases/tierlist.json')
+    User = Query()
+    
+    #the bot reacting to itself
+    if user.id == bot.user.id: return
+    
+    #message isnt in the vote channel
+    res = queue.search(User.channel == reaction.message.channel.id)
+    if len(res) == 0: return
+    
+    #message is still being loaded by the bot and reactions are still being added
+    if type(res[0]['vote_msg_list']) == int: 
+        print(f"{user.display_name} voted too early in {reaction.message.guild.name} - {reaction.message.channel.name}")
+        await reaction.message.remove_reaction(reaction.emoji, user)
+        return
+    
+    #message isnt a vote message
+    if reaction.message.id not in res[0]['vote_msg_list']: return
+    
+    #finds the vote message index
+    val = 0
+    for k,v in enumerate(res[0]['vote_msg_list']):
+        if v == reaction.message.id:
+            val = k
+            break
+        
+    #gets the user that is being voted
+    voteduser = await bot.fetch_user(res[0]['memberids'][val])
+    print(f"{user.display_name} voted {reaction.emoji} for {voteduser.display_name} in {reaction.message.guild.name} - {reaction.message.channel.name}")
+    
+    #user is voting for themselves
+    if res[0]['memberids'][val] == user.id:
+        await reaction.message.remove_reaction(reaction.emoji, user)
+        return
+    
+    cache_msg = discord.utils.get(bot.cached_messages, id=reaction.message.id)
+    
+    #user votes more than once for the same person
+    for r in cache_msg.reactions:
+        if r.count == 1: continue #attempt to speed things along so the if statemnt isnt called every time
+        if user in [reactuser async for reactuser in r.users()] and not user.bot and str(r) != str(reaction.emoji): #really slow
+            await cache_msg.remove_reaction(r.emoji, user)
+    
+        
         
 # @bot.event
 # async def on_voice_state_update(member, before, after):
@@ -130,9 +177,13 @@ async def tierlist(interaction: discord.Interaction, timer: bool = False, voting
     
     for member in members:
         #reaction message
-        vote_msg = await interaction.channel.send(f'Where should {member.global_name if member.global_name is not None else member.name} be placed?')
+        vote_msg = await interaction.channel.send(f'Where should {member.display_name} be placed?')
+        try:
+            await member.send(f'https://tenor.com/view/vote-gif-20791024\n{interaction.channel.mention}')
+        except:
+            pass
         await vote_msg.add_reaction('🆘')
-        vote_msg.id
+        # vote_msg.id
         indicators = ["s", "a", "b", "c", "d", "e", "f"]
         for i in indicators:
             await vote_msg.add_reaction(lookup("REGIONAL INDICATOR SYMBOL LETTER %s" % i))
@@ -156,7 +207,7 @@ async def tierlist(interaction: discord.Interaction, timer: bool = False, voting
             ])
         return
         
-@bot.tree.command(name = "endtierlist", description='Ends voting for the Teir List')
+@bot.tree.command(name = "endtierlist", description='Ends voting for the Tierlist')
 async def endtierlist(interaction: discord.Interaction):
     print(f'Command: {interaction.command.name} was invoked by {interaction.user.display_name} in {interaction.guild.name} - {interaction.channel.name}')
     if not (interaction.user.guild_permissions.administrator or interaction.user.id == myID):
@@ -379,8 +430,8 @@ async def play(interaction: discord.Interaction, query: str, music: bool = True,
     select.callback = my_mycallback
     select2.callback = my_mycallback2
     #creates both views
-    view = View()
-    view2 = View()
+    view = View(timeout=None)
+    view2 = View(timeout=None)
     #timeout functions
     view.on_timeout = remove
     view2.on_timeout = remove
@@ -444,7 +495,7 @@ async def queue(interaction: discord.Interaction):
         await queueembed.delete()
         return
     
-    queue_view = queueView(qembed,res,total_pages)
+    queue_view = queueView(qembed,res,total_pages, timeout=None)
     queue_view.on_timeout = remove
     queueembed = await interaction.channel.send(embed=qembed,view=queue_view)
     queue_view.queueembed = queueembed

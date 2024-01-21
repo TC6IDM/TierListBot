@@ -14,8 +14,8 @@ class deleteView(discord.ui.View):
     Adds a delete button to the view
     '''
     
-    def __init__(self):
-        super().__init__()
+    def __init__(self,timeout = 180):
+        super().__init__(timeout=timeout)
         
     @discord.ui.button(label='Delete', style=discord.ButtonStyle.red, custom_id="Delete")
     async def Delete(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -45,8 +45,8 @@ class queueView(deleteView):
     queueembed: discord.Message
     total_pages: int
     
-    def __init__(self, embed: discord.Embed, res:list, total_pages:int):
-        super().__init__()
+    def __init__(self, embed: discord.Embed, res:list, total_pages:int,timeout = 180):
+        super().__init__(timeout=timeout)
         self.embed = embed
         self.res = res
         self.listnumber = 1
@@ -110,8 +110,8 @@ class SimpleView(discord.ui.View):
     musicembed: discord.Message
     guildid: int
     
-    def __init__(self, vc: discord.VoiceClient, interaction: discord.Interaction):
-        super().__init__()
+    def __init__(self, vc: discord.VoiceClient, interaction: discord.Interaction, timeout = 180):
+        super().__init__(timeout = timeout)
         self.vc = vc
         self.embed = None
         self.musicembed = None
