@@ -19,7 +19,7 @@ from createQueueEmbed import createQueueEmbed
 # from pytube import Search
 from pytube import Search
 from pytube.contrib.playlist import Playlist
-from tierlistUtil import createlist
+from tierlistUtil import createlist, normalize_vote
 from songUtil import *
 from buttonviews import deleteView, queueView
 import re
@@ -60,7 +60,7 @@ async def on_reaction_add(reaction: discord.reaction.Reaction, user: discord.mem
     
     #message is still being loaded by the bot and reactions are still being added
     if type(res[0]['vote_msg_list']) == int: 
-        print(f"{user.display_name} voted too early in {reaction.message.guild.name} - {reaction.message.channel.name}")
+        print(f"{user.display_name} voted {normalize_vote(reaction.emoji)} too early in {reaction.message.guild.name} - {reaction.message.channel.name}")
         await reaction.message.remove_reaction(reaction.emoji, user)
         return
     
@@ -79,11 +79,11 @@ async def on_reaction_add(reaction: discord.reaction.Reaction, user: discord.mem
     
     #user is voting for themselves
     if res[0]['memberids'][val] == user.id:
-        print(f"{user.display_name} voted for themselves in {reaction.message.guild.name} - {reaction.message.channel.name}")
+        print(f"{user.display_name} voted {normalize_vote(reaction.emoji)} for themselves in {reaction.message.guild.name} - {reaction.message.channel.name}")
         await reaction.message.remove_reaction(reaction.emoji, user)
         return
     
-    print(f"{user.display_name} voted {reaction.emoji} for {voteduser.display_name} in {reaction.message.guild.name} - {reaction.message.channel.name}")
+    print(f"{user.display_name} voted {normalize_vote(reaction.emoji)} for {voteduser.display_name} in {reaction.message.guild.name} - {reaction.message.channel.name}")
 
     cache_msg = discord.utils.get(bot.cached_messages, id=reaction.message.id)
     
@@ -508,6 +508,10 @@ async def fraudwatch(interaction: discord.Interaction, option: Literal['Add', 'R
     db = TinyDB('databases/fraudwatch.json')
     User = Query()
     res = db.search(User.channel == interaction.channel.id)
+    if reason != "":
+        reason = "\n-" +reason
+    if user is None: option = 'View'
+    
     if option == 'View':
         if len(res) == 0 or len(res[0]['fraudwatch']) == 0:
             try:
@@ -533,7 +537,8 @@ async def fraudwatch(interaction: discord.Interaction, option: Literal['Add', 'R
                 await interaction.response.send_message(f"Adding {user.display_name} to fraudwatch", ephemeral = True, delete_after=5)
             except:
                 pass
-            db.insert({'channel': interaction.channel.id, 'fraudwatch': {user.id : "\n-" +reason}})
+            
+            db.insert({'channel': interaction.channel.id, 'fraudwatch': {user.id : reason}})
             return
         
         # print(list(res[0]['fraudwatch'].keys()))
@@ -543,9 +548,9 @@ async def fraudwatch(interaction: discord.Interaction, option: Literal['Add', 'R
                 await interaction.response.send_message(f"Updating {user.display_name}'s fraudwatch reason", ephemeral = True, delete_after=5)
             except:
                 pass
-            res[0]['fraudwatch'][str(user.id)] = res[0]['fraudwatch'][str(user.id)] + "\n-" + reason
+            res[0]['fraudwatch'][str(user.id)] = res[0]['fraudwatch'][str(user.id)] + reason
         else:
-            res[0]['fraudwatch'][str(user.id)] = "\n-" +reason
+            res[0]['fraudwatch'][str(user.id)] = reason
             try:
                 await interaction.response.send_message(f"Adding {user.display_name} to fraudwatch", ephemeral = True, delete_after=5)
             except:

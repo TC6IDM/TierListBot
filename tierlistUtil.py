@@ -1,8 +1,37 @@
 import io
-from discord import TextChannel, File, TextChannel, User
+from discord import Emoji, TextChannel, File, TextChannel, User
 import discord
 from PIL import Image
 
+
+def normalize_vote(emoji: Emoji) -> str:
+    '''
+    Normalizes the vote emoji
+    
+    :param emoji: 
+        the emoji to normalize
+    :return:
+        the normalized emoji
+    '''
+    match emoji:
+        case "🆘":
+            return "S+++"
+        case "🇸":
+            return "S"
+        case "🇦":
+            return "A"
+        case "🇧":
+            return "B"
+        case "🇨":
+            return "C"
+        case "🇩":
+            return "D"
+        case "🇪":
+            return "E"
+        case "🇫":
+            return "F"
+        case _:
+            return "?"
 
 async def createlist(channel: TextChannel, vote_msg_list: list[int], members: list[User]):
     '''
@@ -44,14 +73,14 @@ async def createlist(channel: TextChannel, vote_msg_list: list[int], members: li
         fulldebugstatement+= f"{members[val].display_name}: "
         
         for reaction in vote_msg.reactions:
-            fulldebugstatement+= f"{reaction.emoji}: {reaction.count-1}, "
+            fulldebugstatement+= f"{normalize_vote(reaction.emoji)}: {reaction.count-1}, "
             if (reaction.count-1) > highest_reaction_number:
                 highest_reaction = reaction.emoji
                 highest_reaction_number = reaction.count-1
 
         #if no one voted for this person, put them in the F tier
         highest_reaction = highest_reaction if highest_reaction != "" else "🇫"
-        fulldebugstatement+= f"\n{members[val].display_name}: {highest_reaction}\n"
+        fulldebugstatement+= f"\n{members[val].display_name}: {normalize_vote(highest_reaction)}\n"
         ## code to fuck over david
         # davidsid = 382271649724104705
         # highest_reaction = "🆘" if members[val].id == davidsid else highest_reaction
