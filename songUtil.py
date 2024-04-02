@@ -99,6 +99,8 @@ async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceS
         print(destination)
         await asyncio.sleep(1)
     
+    total_time = timedelta(seconds=queinfo['durationSeconds'])
+    
     #create embed for the song
     embed=discord.Embed(title="🎶 Now Playing ▶️", url=queinfo['videourl'], color=0xff0000)
     embed.set_author(name=f'{interaction.client.application.name} Music', url="https://github.com/TC6IDM/TierListBot", icon_url=interaction.client.application.icon.url)
@@ -106,9 +108,12 @@ async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceS
     embed.add_field(name="Track",value= queinfo['trackname'][:255],inline=True)
     embed.add_field(name="Requested By",value=userreq.mention,inline=True)
     embed.add_field(name="Duration",value=queinfo['duration'],inline=True)
+    embed.add_field(name="Playback Position",value=f"barrrrrrrrrrrr\n0:00:00 / {total_time}",inline=False)
     embed.set_footer(text=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     
     view = SimpleView(vc,interaction, timeout=None)
+    
+    # embed.set_field_at(3, name="Track", value=queinfo['trackname'][:255], inline=True)
     
     #sends the embed
     musicembed = await interaction.channel.send(embed=embed, view=view)
@@ -132,9 +137,20 @@ async def playtrack(interaction: Interaction[Client], queinfo, uservoice: VoiceS
         vc.play(discord.FFmpegPCMAudio(queinfo['output']))
         await view.updatetitle()
         #song is on
+        timeElapsed = 0
+        # import time
+        import time  
+        startedat = time.time()
         while (vc.is_playing() or vc.is_paused()) and vc.is_connected():
+            current_time = time.time()
+            # print(vc.source)
+            elapsed_time = timedelta(seconds=round(current_time-startedat))
+            # print(f"Elapsed Time: {elapsed_time} / Total Time: {total_time}")
+            bar = "~~▬~~" * round(timeElapsed/queinfo['durationSeconds']*25) + "🔘" + "~~▬~~" * round((queinfo['durationSeconds']-timeElapsed)/queinfo['durationSeconds']*25)
+            embed.set_field_at(3, name="Playback Position",value=f"{bar}\n{str(elapsed_time)[2:] if queinfo['durationSeconds'] < 3600 else elapsed_time} / {str(total_time)[2:] if queinfo['durationSeconds'] < 3600 else total_time}",inline=False)
+            await musicembed.edit(embed=embed, view=view)             
             await asyncio.sleep(1)
-            
+            timeElapsed+=1
         
         queue = TinyDB('databases/queue.json')
         User = Query()
@@ -322,11 +338,11 @@ def addtoQueue(interaction: Interaction[Client], videoObj: YoutubeSearchCustom) 
     print(res)
     if len(res) == 0:
         queue.insert({'server': interaction.guild.id, 'queue': 
-            [{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'output':output}],
+            [{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'durationSeconds': videoObj.length_seconds, 'output':output}],
             'loop': False, 'shuffle': False, 
             'disabled': False})
     else:
-        queue.update({'queue': res[0]['queue']+[{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'output':output}]}, where('server') == interaction.guild.id)
+        queue.update({'queue': res[0]['queue']+[{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'durationSeconds': videoObj.length_seconds, 'output':output}]}, where('server') == interaction.guild.id)
     
     return output
 
