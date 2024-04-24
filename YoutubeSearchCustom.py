@@ -25,7 +25,6 @@ class YoutubeSearchCustom():
         self.viewCountText = 'explicit' if obj['isExplicit'] else 'clean'
         self.watch_url = f"https://music.youtube.com/watch?v={obj['videoId']}"
         self.thumbnail_url = obj['thumbnails'][0]['url']
-        
         # print(self.title)
         # print(self.viewCountText)
         # print(self.watch_url)

@@ -335,7 +335,7 @@ def addtoQueue(interaction: Interaction[Client], videoObj: YoutubeSearchCustom) 
     queue = TinyDB('databases/queue.json')
     User = Query()
     res = queue.search(User.server == interaction.guild.id)
-    print(res)
+    print(res) 
     if len(res) == 0:
         queue.insert({'server': interaction.guild.id, 'queue': 
             [{'videourl':videoObj.watch_url,'userid':interaction.user.id,'thumbnail_url':videoObj.thumbnail_url,'trackname':videoObj.title,'duration':videoObj.vidlength, 'durationSeconds': videoObj.length_seconds, 'output':output}],
@@ -375,6 +375,11 @@ async def queryYouTubeLink(query:str, interaction: Interaction[Client], uservoic
                 pass
             return
         videoObj = videoObj[0]
+        
+        # try: 
+        #     videoObj.thumbnail_url
+        # except:
+        #     videoObj.thumbnail_url = "https://img.youtube.com/vi/SvKSwOIyIpw/maxresdefault.jpg"
         # videoObj = YouTube(query)
         # print(len(videoObj))
         # await interaction.response.send_message(f'playing', ephemeral = True, delete_after=5)

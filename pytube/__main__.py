@@ -307,14 +307,14 @@ class YouTube:
 
         :rtype: str
         """
-        thumbnail_details = (
-            self.vid_info.get("videoDetails", {})
-            .get("thumbnail", {})
-            .get("thumbnails")
-        )
-        if thumbnail_details:
-            thumbnail_details = thumbnail_details[-1]  # last item has max size
-            return thumbnail_details["url"]
+        # thumbnail_details = (
+        #     self.vid_info.get("videoDetails", {})
+        #     .get("thumbnail", {})
+        #     .get("thumbnails")
+        # )
+        # if thumbnail_details:
+        #     thumbnail_details = thumbnail_details[-1]  # last item has max size
+        #     return thumbnail_details["url"]
 
         return f"https://img.youtube.com/vi/{self.video_id}/maxresdefault.jpg"
 
